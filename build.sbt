@@ -1,6 +1,11 @@
+import xerial.sbt.Sonatype.SonatypeKeys
+import SonatypeKeys._
+
+xerial.sbt.Sonatype.sonatypeSettings
+
 name := "spark-indexedrdd"
 
-version := "0.1"
+version := "0.1-SNAPSHOT"
 
 organization := "edu.berkeley.cs.amplab"
 
