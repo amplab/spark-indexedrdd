@@ -2,7 +2,7 @@
 
 An efficient updatable key-value store for [Apache Spark](http://spark.apache.org).
 
-IndexedRDD extends `RDD[(Long, V)]` by enforcing key uniqueness and pre-indexing the entries for efficient joins and point lookups, updates, and deletions. It is be implemented by (1) hash-partitioning the entries by key, (2) maintaining a hash index within each partition, and (3) using purely functional (immutable and efficiently updatable) data structures to enable efficient modifications and deletions.
+IndexedRDD extends `RDD[(Long, V)]` by enforcing key uniqueness and pre-indexing the entries for efficient joins and point lookups, updates, and deletions. It is implemented by (1) hash-partitioning the entries by key, (2) maintaining a hash index within each partition, and (3) using purely functional (immutable and efficiently updatable) data structures to enable efficient modifications and deletions.
 
 ## Usage
 
