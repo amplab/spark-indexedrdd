@@ -32,7 +32,7 @@ import edu.berkeley.cs.amplab.spark.indexedrdd.IndexedRDD.Id
  * An RDD of key-value `(Id, V)` pairs that enforces key uniqueness and pre-indexes the entries for
  * efficient joins and point lookups/updates. Two IndexedRDDs with the same index can be joined
  * efficiently. All operations except [[reindex]] preserve the index. To construct an `IndexedRDD`,
- * use the [[org.apache.spark.rdd.IndexedRDD$ IndexedRDD object]].
+ * use the [[edu.berkeley.cs.amplab.spark.indexedrdd.IndexedRDD$ IndexedRDD object]].
  *
  * @tparam V the value associated with each entry in the set.
  */
