@@ -17,7 +17,7 @@ libraryDependencies += "edu.berkeley.cs.amplab" %% "spark-indexedrdd" % "0.1-SNA
 Then use IndexedRDD as follows:
 
 ```scala
-import edu.berkeley.cs.amplab.spark.IndexedRDD
+import edu.berkeley.cs.amplab.spark.indexedrdd.IndexedRDD
 
 // Create an RDD of key-value pairs with Long keys.
 val rdd = sc.parallelize((1 to 1000000).map(x => (x.toLong, 0)))
