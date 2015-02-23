@@ -76,6 +76,13 @@ class IndexableRDD[K: ClassTag, V: ClassTag](ik: IndexableKey[K],
 object IndexableRDD extends Serializable {
   type Id = Long
 
+
+  /**
+   * The mapping between the key type and an id (Long)
+   * @note it is essential that for all possible K in the program toId(fromId(idval)) == idval
+   * @tparam K the type of the key (anything at all)
+   *
+   */
   trait IndexableKey[K] extends Serializable {
     def toId(key: K): Id
     def fromId(id: Id): K

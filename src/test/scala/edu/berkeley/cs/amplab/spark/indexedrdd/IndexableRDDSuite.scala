@@ -71,8 +71,12 @@ object IndexableRDDSuite {
 
   case class Point3D(x: Int, y: Int, z: Int)
 
+
+  /**
+   * offers translation for positive Point3D between 0,0,0 and 99,99,99
+   */
   val p3dKey = new IndexableKey[Point3D] {
-    override def toId(key: Point3D): Id = 1000*key.z+100*key.y+key.x
+    override def toId(key: Point3D): Id = (100*key.z+key.y)*100+key.x
 
     override def fromId(id: Id): Point3D =
       Point3D(
