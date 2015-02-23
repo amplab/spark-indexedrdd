@@ -80,4 +80,18 @@ object IndexedRDD {
       preservesPartitioning = true)
     new IndexedRDD(partitions)
   }
+
+  /** Create an IndexedRdd from a non-long type and a conversion function
+    *
+    * @param rawRdd the original RDD
+    * @param createIndex a function to convert the type K into Long
+    * @tparam K the type of the image
+    * @tparam V the type of the data
+    */
+  def apply[K: ClassTag, V: ClassTag](
+                        rawRdd: RDD[(K,V)],
+                                     createIndex: K => Id
+                          ) = {
+
+  }
 }
