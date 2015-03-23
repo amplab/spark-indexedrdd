@@ -11,11 +11,17 @@ organization := "edu.berkeley.cs.amplab"
 
 scalaVersion := "2.10.4"
 
-libraryDependencies += "org.apache.spark" %% "spark-core" % "1.1.0"
+spName := "amplab/spark-indexedrdd"
+
+sparkVersion := "1.1.0"
+
+sparkComponents += "core"
 
 libraryDependencies += "com.google.guava" % "guava" % "14.0.1"
 
 publishMavenStyle := true
+
+licenses += "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.html")
 
 publishTo := {
   val nexus = "https://oss.sonatype.org/"
@@ -27,13 +33,6 @@ publishTo := {
 
 pomExtra := (
   <url>https://github.com/amplab/spark-indexedrdd</url>
-  <licenses>
-    <license>
-      <name>Apache License, Version 2.0</name>
-      <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
-      <distribution>repo</distribution>
-    </license>
-  </licenses>
   <scm>
     <url>git@github.com:amplab/spark-indexedrdd.git</url>
     <connection>scm:git:git@github.com:amplab/spark-indexedrdd.git</connection>
