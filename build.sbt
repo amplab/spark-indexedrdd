@@ -5,7 +5,7 @@ xerial.sbt.Sonatype.sonatypeSettings
 
 name := "spark-indexedrdd"
 
-version := "0.1-SNAPSHOT"
+version := "0.1"
 
 organization := "edu.berkeley.cs.amplab"
 
