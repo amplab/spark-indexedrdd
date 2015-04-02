@@ -81,17 +81,17 @@ private[indexedrdd] abstract class IndexedRDDPartition[K, V] extends Serializabl
    * Left-biased union of `this` with `other`. Runs `f` on the values of corresponding keys,
    * preserving values in `this` with no corresponding entries in `other`.
    */
-  def union[U: ClassTag]
-      (other: IndexedRDDPartition[K, U])
-      (f: (K, V, U) => V): IndexedRDDPartition[K, V]
+  def union
+      (other: IndexedRDDPartition[K, V])
+      (f: (K, V, V) => V): IndexedRDDPartition[K, V]
 
   /**
    * Left-biased union of `this` with `other`. Runs `f` on the values of corresponding keys,
    * preserving values in `this` with no corresponding entries in `other`.
    */
-  def union[U: ClassTag]
-      (other: Iterator[(K, U)])
-      (f: (K, V, U) => V): IndexedRDDPartition[K, V]
+  def union
+      (other: Iterator[(K, V)])
+      (f: (K, V, V) => V): IndexedRDDPartition[K, V]
 
   /** Left outer joins `this` with `other`, running `f` on all values of `this`. */
   def leftOuterJoin[V2: ClassTag, V3: ClassTag]

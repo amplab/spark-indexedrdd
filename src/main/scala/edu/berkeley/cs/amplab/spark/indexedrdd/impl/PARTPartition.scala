@@ -71,7 +71,26 @@ private[indexedrdd] class PARTPartition[K, V]
       (other: IndexedRDDPartition[K, V2])
       (f: (K, Option[V], Option[V2]) => W): IndexedRDDPartition[K, W] = other match {
     case other: PARTPartition[K, V2] =>
-      ???
+      val newMap = new ArtTree
+      // Scan `this` and probe `other`, adding all elements in `this`
+      for (kv <- rawIterator) {
+        val newV = f(
+          kSer.fromBytes(kv._1),
+          Some(kv._2),
+          Option(other.map.search(kv._1).asInstanceOf[V2]))
+        newMap.insert(kv._1, newV)
+      }
+      // Scan `other` and probe `this`, adding only the elements present in `other` but not `this`
+      for (kv <- other.rawIterator) {
+        if (this.map.search(kv._1) == null) {
+          val newV = f(
+            kSer.fromBytes(kv._1),
+            None,
+            Some(kv._2))
+          newMap.insert(kv._1, newV)
+        }
+      }
+      this.withMap[W](newMap)
 
     case _ =>
       fullOuterJoin(other.iterator)(f)
@@ -79,21 +98,40 @@ private[indexedrdd] class PARTPartition[K, V]
 
   override def fullOuterJoin[V2: ClassTag, W: ClassTag]
       (other: Iterator[(K, V2)])
-      (f: (K, Option[V], Option[V2]) => W): IndexedRDDPartition[K, W] = ???
+      (f: (K, Option[V], Option[V2]) => W): IndexedRDDPartition[K, W] =
+    fullOuterJoin(PARTPartition(other))(f)
 
-  override def union[U: ClassTag]
-      (other: IndexedRDDPartition[K, U])
-      (f: (K, V, U) => V): IndexedRDDPartition[K, V] = other match {
-    case other: PARTPartition[K, U] =>
-      ???
+  override def union
+      (other: IndexedRDDPartition[K, V])
+      (f: (K, V, V) => V): IndexedRDDPartition[K, V] = other match {
+    case other: PARTPartition[K, V] =>
+      // Scan `this` and probe `other`, adding all elements in `this`
+      val newMap = new ArtTree
+      for (kv <- rawIterator) {
+        val newV = f(
+          kSer.fromBytes(kv._1),
+          kv._2,
+          other.map.search(kv._1).asInstanceOf[V])
+        newMap.insert(kv._1, newV)
+      }
+      // Scan `other` and probe `this`, adding only the elements present in `other` but not `this`
+      for (kv <- other.rawIterator) {
+        val newV = f(
+          kSer.fromBytes(kv._1),
+          this.map.search(kv._1).asInstanceOf[V],
+          kv._2)
+        newMap.insert(kv._1, newV)
+      }
+      this.withMap[V](newMap)
 
     case _ =>
       union(other.iterator)(f)
   }
 
-  override def union[U: ClassTag]
-      (other: Iterator[(K, U)])
-      (f: (K, V, U) => V): IndexedRDDPartition[K, V] = ???
+  override def union
+      (other: Iterator[(K, V)])
+      (f: (K, V, V) => V): IndexedRDDPartition[K, V] =
+    union(PARTPartition(other))(f)
 
   override def leftOuterJoin[V2: ClassTag, V3: ClassTag]
       (other: IndexedRDDPartition[K, V2])
@@ -113,26 +151,44 @@ private[indexedrdd] class PARTPartition[K, V]
 
   override def leftOuterJoin[V2: ClassTag, V3: ClassTag]
       (other: Iterator[(K, V2)])
-      (f: (K, V, Option[V2]) => V3): IndexedRDDPartition[K, V3] = ???
+      (f: (K, V, Option[V2]) => V3): IndexedRDDPartition[K, V3] =
+    leftOuterJoin(PARTPartition(other))(f)
 
   override def innerJoin[U: ClassTag, V2: ClassTag]
       (other: IndexedRDDPartition[K, U])
-      (f: (K, V, U) => V2): IndexedRDDPartition[K, V2] = ???
+      (f: (K, V, U) => V2): IndexedRDDPartition[K, V2] = other match {
+    case other: PARTPartition[K, U] =>
+      // Scan `this` and probe `other`
+      val newMap = new ArtTree
+      for (kv <- rawIterator) {
+        val otherV = other.map.search(kv._1).asInstanceOf[U]
+        if (otherV != null) newMap.insert(kv._1, f(kSer.fromBytes(kv._1), kv._2, otherV))
+      }
+      this.withMap[V2](newMap)
+
+    case _ =>
+      innerJoin(other.iterator)(f)
+  }
 
   override def innerJoin[U: ClassTag, V2: ClassTag]
       (other: Iterator[(K, U)])
-      (f: (K, V, U) => V2): IndexedRDDPartition[K, V2] = ???
+      (f: (K, V, U) => V2): IndexedRDDPartition[K, V2] =
+    innerJoin(PARTPartition(other))(f)
 }
 
 private[indexedrdd] object PARTPartition {
+  def apply[K: ClassTag, V: ClassTag]
+      (iter: Iterator[(K, V)])(implicit kSer: KeySerializer[K]) =
+    apply[K, V, V](iter, (id, a) => a, (id, a, b) => a)
+
   def apply[K: ClassTag, U: ClassTag, V: ClassTag]
-      (iter: Iterator[(K, U)], z: U => V, f: (V, U) => V)
+      (iter: Iterator[(K, U)], z: (K, U) => V, f: (K, V, U) => V)
       (implicit kSer: KeySerializer[K]): PARTPartition[K, V] = {
     val map = new ArtTree
     iter.foreach { ku =>
       val kBytes = kSer.toBytes(ku._1)
       val oldV = map.search(kBytes).asInstanceOf[V]
-      val newV = if (oldV == null) z(ku._2) else f(oldV, ku._2)
+      val newV = if (oldV == null) z(ku._1, ku._2) else f(ku._1, oldV, ku._2)
       map.insert(kBytes, newV)
     }
     new PARTPartition(map)

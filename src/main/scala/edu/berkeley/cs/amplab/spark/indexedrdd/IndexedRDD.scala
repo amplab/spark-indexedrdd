@@ -240,10 +240,15 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
 }
 
 object IndexedRDD {
+  /** Constructs an IndexedRDD from an RDD of pairs, merging duplicate keys arbitrarily. */
+  def updatable[K: ClassTag : KeySerializer, V: ClassTag]
+      (elems: RDD[(K, V)], partitioner: Partitioner)
+    : IndexedRDD[K, V] = updatable[K, V, V](elems, (id, a) => a, (id, a, b) => a, partitioner)
+
   /** Constructs an IndexedRDD from an RDD of pairs. */
-  def updatable[K: ClassTag, U: ClassTag, V: ClassTag]
-      (elems: RDD[(K, U)], z: U => V, f: (V, U) => V, partitioner: Partitioner)
-      (implicit kSer: KeySerializer[K]): IndexedRDD[K, V] = {
+  def updatable[K: ClassTag : KeySerializer, U: ClassTag, V: ClassTag]
+      (elems: RDD[(K, U)], z: (K, U) => V, f: (K, V, U) => V, partitioner: Partitioner)
+    : IndexedRDD[K, V] = {
     val partitions = elems.partitionBy(partitioner).mapPartitions[IndexedRDDPartition[K, V]](
       iter => Iterator(PARTPartition(iter, z, f)),
       preservesPartitioning = true)

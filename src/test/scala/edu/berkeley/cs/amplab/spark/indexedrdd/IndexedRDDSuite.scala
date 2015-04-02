@@ -96,7 +96,7 @@ abstract class IndexedRDDSuite extends FunSuite with SharedSparkContext {
 class UpdatableIndexedRDDSuite extends IndexedRDDSuite {
   override def create[V: ClassTag](elems: RDD[(Long, V)]): IndexedRDD[Long, V] = {
     import IndexedRDD._
-    IndexedRDD.updatable[Long, V, V](elems, identity, (a, b) => a, new HashPartitioner(elems.partitions.length))
+    IndexedRDD.updatable(elems, new HashPartitioner(elems.partitions.length))
   }
 
   test("put, multiput") {

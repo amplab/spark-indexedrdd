@@ -56,6 +56,6 @@ abstract class IndexedRDDPartitionSuite extends FunSuite {
 class PARTPartitionSuite extends IndexedRDDPartitionSuite {
   override def create[V: ClassTag](iter: Iterator[(Long, V)]) = {
     import IndexedRDD._
-    PARTPartition[Long, V, V](iter, identity, (a, b) => a)
+    PARTPartition(iter)
   }
 }
