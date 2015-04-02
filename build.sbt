@@ -31,3 +31,5 @@ pomExtra := (
   </developers>)
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.4" % "test"
+
+libraryDependencies += "com.ankurdave" %% "part" % "0.1-SNAPSHOT"
