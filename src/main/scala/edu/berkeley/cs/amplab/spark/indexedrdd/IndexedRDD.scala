@@ -100,13 +100,13 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
    * Unconditionally updates the keys in `kvs` to their corresponding values. Returns a new
    * IndexedRDD that reflects the modification.
    */
-  def multiput(kvs: Map[K, V]): IndexedRDD[K, V] = multiput[V](kvs, identity, (id, a, b) => a)
+  def multiput(kvs: Map[K, V]): IndexedRDD[K, V] = multiput[V](kvs, (id, a) => a, (id, a, b) => b)
 
   /**
    * Updates the keys in `kvs` to their corresponding values, running `merge` on old and new values
    * if necessary. Returns a new IndexedRDD that reflects the modification.
    */
-  def multiput[U: ClassTag](kvs: Map[K, U], z: U => V, f: (K, U, V) => V): IndexedRDD[K, V] = {
+  def multiput[U: ClassTag](kvs: Map[K, U], z: (K, U) => V, f: (K, V, U) => V): IndexedRDD[K, V] = {
     val updates = context.parallelize(kvs.toSeq).partitionBy(partitioner.get)
     zipPartitionsWithOther(updates)(new MultiputZipper(z, f))
   }
@@ -190,7 +190,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
     Function2[Iterator[IndexedRDDPartition[K, V]], Iterator[(K, V2)],
       Iterator[IndexedRDDPartition[K, V3]]]
 
-  private class MultiputZipper[U](z: U => V, f: (K, U, V) => V)
+  private class MultiputZipper[U](z: (K, U) => V, f: (K, V, U) => V)
       extends OtherZipPartitionsFunction[U, V] with Serializable {
     def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[(K, U)])
       : Iterator[IndexedRDDPartition[K, V]] = {
@@ -243,7 +243,7 @@ object IndexedRDD {
   /** Constructs an IndexedRDD from an RDD of pairs, merging duplicate keys arbitrarily. */
   def updatable[K: ClassTag : KeySerializer, V: ClassTag]
       (elems: RDD[(K, V)], partitioner: Partitioner)
-    : IndexedRDD[K, V] = updatable[K, V, V](elems, (id, a) => a, (id, a, b) => a, partitioner)
+    : IndexedRDD[K, V] = updatable[K, V, V](elems, (id, a) => a, (id, a, b) => b, partitioner)
 
   /** Constructs an IndexedRDD from an RDD of pairs. */
   def updatable[K: ClassTag : KeySerializer, U: ClassTag, V: ClassTag]

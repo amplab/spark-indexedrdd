@@ -52,7 +52,8 @@ private[indexedrdd] abstract class IndexedRDDPartition[K, V] extends Serializabl
    * values, if an old value exists, or `z` otherwise. Returns a new IndexedRDDPartition that
    * reflects the modification.
    */
-  def multiput[U](kvs: Iterator[(K, U)], z: U => V, f: (K, U, V) => V): IndexedRDDPartition[K, V] =
+  def multiput[U](
+      kvs: Iterator[(K, U)], z: (K, U) => V, f: (K, V, U) => V): IndexedRDDPartition[K, V] =
     throw new UnsupportedOperationException("modifications not supported")
 
   /** Deletes the specified keys. Returns a new IndexedRDDPartition that reflects the deletions. */

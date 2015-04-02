@@ -102,9 +102,9 @@ class UpdatableIndexedRDDSuite extends IndexedRDDSuite {
   test("put, multiput") {
     val n = 100
     val ps = pairs(sc, n).cache()
-    assert(ps.multiput[Int](Map(0L -> 1, 1L -> 1), identity, SumFunction).collect.toSet ===
+    assert(ps.multiput[Int](Map(0L -> 1, 1L -> 1), (id, a) => a, SumFunction).collect.toSet ===
       Set(0L -> 1, 1L -> 2) ++ (2 to n).map(x => (x.toLong, x)).toSet)
-    assert(ps.multiput[Int](Map(-1L -> -1, 0L -> 1), identity, SumFunction).collect.toSet ===
+    assert(ps.multiput[Int](Map(-1L -> -1, 0L -> 1), (id, a) => a, SumFunction).collect.toSet ===
       Set(-1L -> -1, 0L -> 1) ++ (1 to n).map(x => (x.toLong, x)).toSet)
     assert(ps.multiput(Map(-1L -> -1, 0L -> 1, 1L -> 1)).collect.toSet ===
       Set(-1L -> -1, 0L -> 1, 1L -> 1) ++ (2 to n).map(x => (x.toLong, x)).toSet)
