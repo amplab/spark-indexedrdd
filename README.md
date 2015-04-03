@@ -6,12 +6,12 @@ IndexedRDD extends `RDD[(Long, V)]` by enforcing key uniqueness and pre-indexing
 
 ## Usage
 
-Add the dependency to your SBT project by adding the following to `build.sbt`:
+Add the dependency to your SBT project by adding the following to `build.sbt` (see the [Spark Packages listing](http://spark-packages.org/package/amplab/spark-indexedrdd) for spark-submit and Maven instructions):
 
 ```scala
-resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
+resolvers += "Spark Packages Repo" at "http://dl.bintray.com/spark-packages/maven"
 
-libraryDependencies += "edu.berkeley.cs.amplab" %% "spark-indexedrdd" % "0.1-SNAPSHOT"
+libraryDependencies += "amplab" % "spark-indexedrdd" % "0.1"
 ```
 
 Then use IndexedRDD as follows:

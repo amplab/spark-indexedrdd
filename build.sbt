@@ -1,11 +1,6 @@
-import xerial.sbt.Sonatype.SonatypeKeys
-import SonatypeKeys._
-
-xerial.sbt.Sonatype.sonatypeSettings
-
 name := "spark-indexedrdd"
 
-version := "0.1"
+version := "0.2-SNAPSHOT"
 
 organization := "edu.berkeley.cs.amplab"
 
@@ -13,23 +8,13 @@ scalaVersion := "2.10.4"
 
 spName := "amplab/spark-indexedrdd"
 
-sparkVersion := "1.1.0"
+sparkVersion := "1.3.0"
 
 sparkComponents += "core"
-
-libraryDependencies += "com.google.guava" % "guava" % "14.0.1"
 
 publishMavenStyle := true
 
 licenses += "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.html")
-
-publishTo := {
-  val nexus = "https://oss.sonatype.org/"
-  if (version.value.endsWith("SNAPSHOT"))
-    Some("snapshots" at nexus + "content/repositories/snapshots")
-  else
-    Some("releases"  at nexus + "service/local/staging/deploy/maven2")
-}
 
 pomExtra := (
   <url>https://github.com/amplab/spark-indexedrdd</url>
@@ -45,7 +30,4 @@ pomExtra := (
     </developer>
   </developers>)
 
-// Enable Junit testing.
-// libraryDependencies += "com.novocode" % "junit-interface" % "0.9" % "test"
-
-libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.1" % "test"
+libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.4" % "test"
