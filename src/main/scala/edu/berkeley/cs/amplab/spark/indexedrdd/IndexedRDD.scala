@@ -398,16 +398,21 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
 }
 
 object IndexedRDD {
-  /** Constructs an IndexedRDD from an RDD of pairs, merging duplicate keys arbitrarily. */
+  /**
+   * Constructs an updatable IndexedRDD from an RDD of pairs, merging duplicate keys arbitrarily.
+   */
   def updatable[K: ClassTag : KeySerializer, V: ClassTag]
-      (elems: RDD[(K, V)], partitioner: Partitioner)
-    : IndexedRDD[K, V] = updatable[K, V, V](elems, (id, a) => a, (id, a, b) => b, partitioner)
+      (elems: RDD[(K, V)])
+    : IndexedRDD[K, V] = updatable[K, V, V](elems, (id, a) => a, (id, a, b) => b)
 
   /** Constructs an IndexedRDD from an RDD of pairs. */
   def updatable[K: ClassTag : KeySerializer, U: ClassTag, V: ClassTag]
-      (elems: RDD[(K, U)], z: (K, U) => V, f: (K, V, U) => V, partitioner: Partitioner)
+      (elems: RDD[(K, U)], z: (K, U) => V, f: (K, V, U) => V)
     : IndexedRDD[K, V] = {
-    val partitions = elems.partitionBy(partitioner).mapPartitions[IndexedRDDPartition[K, V]](
+    val elemsPartitioned =
+      if (elems.partitioner.isDefined) elems
+      else elems.partitionBy(new HashPartitioner(elems.partitions.size))
+    val partitions = elemsPartitioned.mapPartitions[IndexedRDDPartition[K, V]](
       iter => Iterator(PARTPartition(iter, z, f)),
       preservesPartitioning = true)
     new IndexedRDD(partitions)
