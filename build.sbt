@@ -33,3 +33,8 @@ pomExtra := (
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.4" % "test"
 
 libraryDependencies += "com.ankurdave" %% "part" % "0.1-SNAPSHOT"
+
+// Run tests with more memory
+javaOptions in test += "-Xmx2G"
+
+fork in test := true

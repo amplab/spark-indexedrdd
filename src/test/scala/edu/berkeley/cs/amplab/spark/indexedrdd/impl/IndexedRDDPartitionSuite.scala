@@ -29,28 +29,18 @@ abstract class IndexedRDDPartitionSuite extends FunSuite {
 
   def create[V: ClassTag](iter: Iterator[(Long, V)]): IndexedRDDPartition[Long, V]
 
-  def pairs(n: Int) = {
-    create((0 to n).map(x => (x.toLong, x)).iterator)
+  test("serialization") {
+    val elems = Set((0L, 1), (1L, 1), (2L, 1))
+    val vp = create(elems.iterator)
+    val javaSer = new JavaSerializer(new SparkConf())
+    val kryoSer = new KryoSerializer(new SparkConf()
+      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer"))
+
+    for (ser <- List(javaSer, kryoSer); s = ser.newInstance()) {
+      val vpSer: IndexedRDDPartition[Long, Int] = s.deserialize(s.serialize(vp))
+      assert(vpSer.iterator.toSet === elems)
+    }
   }
-
-  test("filter") {
-    val vp = pairs(50)
-    val vp2 = vp.filter((k, v) => k % 2 == 0)
-    assert(vp2.size < vp.size)
-  }
-
-  // test("serialization") {
-  //   val elems = Set((0L, 1), (1L, 1), (2L, 1))
-  //   val vp = create(elems.iterator)
-  //   val javaSer = new JavaSerializer(new SparkConf())
-  //   val kryoSer = new KryoSerializer(new SparkConf()
-  //     .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer"))
-
-  //   for (ser <- List(javaSer, kryoSer); s = ser.newInstance()) {
-  //     val vpSer: IndexedRDDPartition[Long, Int] = s.deserialize(s.serialize(vp))
-  //     assert(vpSer.iterator.toSet === elems)
-  //   }
-  // }
 }
 
 class PARTPartitionSuite extends IndexedRDDPartitionSuite {

@@ -87,6 +87,24 @@ private[indexedrdd] class PARTPartition[K, V]
     this.withMap[V](newMap)
   }
 
+  override def diff(other: IndexedRDDPartition[K, V]): IndexedRDDPartition[K, V] = other match {
+    case other: PARTPartition[K, V] =>
+      val newMap = new ArtTree
+      for (kv <- rawIterator) {
+        val otherV = other.map.search(kv._1).asInstanceOf[V]
+        if (otherV != null && otherV != kv._2) {
+          newMap.insert(kv._1, kv._2)
+        }
+      }
+      this.withMap[V](newMap)
+
+    case _ =>
+      diff(other.iterator)
+  }
+
+  override def diff(other: Iterator[(K, V)]): IndexedRDDPartition[K, V] =
+    diff(PARTPartition(other))
+
   override def fullOuterJoin[V2: ClassTag, W: ClassTag]
       (other: IndexedRDDPartition[K, V2])
       (f: (K, Option[V], Option[V2]) => W): IndexedRDDPartition[K, W] = other match {
@@ -121,39 +139,26 @@ private[indexedrdd] class PARTPartition[K, V]
       (f: (K, Option[V], Option[V2]) => W): IndexedRDDPartition[K, W] =
     fullOuterJoin(PARTPartition(other))(f)
 
-  override def union
-      (other: IndexedRDDPartition[K, V])
-      (f: (K, V, V) => V): IndexedRDDPartition[K, V] = other match {
-    case other: PARTPartition[K, V] =>
-      // Scan `this` and probe `other`, adding all elements in `this`
-      val newMap = new ArtTree
-      for (kv <- rawIterator) {
-        val newV = f(
-          kSer.fromBytes(kv._1),
-          kv._2,
-          other.map.search(kv._1).asInstanceOf[V])
-        newMap.insert(kv._1, newV)
-      }
-      // Scan `other` and probe `this`, adding only the elements present in `other` but not `this`
-      for (kv <- other.rawIterator) {
-        val newV = f(
-          kSer.fromBytes(kv._1),
-          this.map.search(kv._1).asInstanceOf[V],
-          kv._2)
-        newMap.insert(kv._1, newV)
-      }
-      this.withMap[V](newMap)
+  override def join[U: ClassTag]
+      (other: IndexedRDDPartition[K, U])
+      (f: (K, V, U) => V): IndexedRDDPartition[K, V] = join(other.iterator)(f)
 
-    case _ =>
-      union(other.iterator)(f)
+  override def join[U: ClassTag]
+      (other: Iterator[(K, U)])
+      (f: (K, V, U) => V): IndexedRDDPartition[K, V] = {
+    val newMap = map.snapshot()
+    for (ku <- other) {
+      val kBytes = kSer.toBytes(ku._1)
+      val oldV = newMap.search(kBytes).asInstanceOf[V]
+      if (oldV != null) {
+        val newV = f(ku._1, oldV, ku._2)
+        newMap.insert(kBytes, newV)
+      }
+    }
+    this.withMap[V](newMap)
   }
 
-  override def union
-      (other: Iterator[(K, V)])
-      (f: (K, V, V) => V): IndexedRDDPartition[K, V] =
-    union(PARTPartition(other))(f)
-
-  override def leftOuterJoin[V2: ClassTag, V3: ClassTag]
+  override def leftJoin[V2: ClassTag, V3: ClassTag]
       (other: IndexedRDDPartition[K, V2])
       (f: (K, V, Option[V2]) => V3): IndexedRDDPartition[K, V3] = other match {
     case other: PARTPartition[K, V2] =>
@@ -166,13 +171,13 @@ private[indexedrdd] class PARTPartition[K, V]
       this.withMap[V3](newMap)
 
     case _ =>
-      leftOuterJoin(other.iterator)(f)
+      leftJoin(other.iterator)(f)
   }
 
-  override def leftOuterJoin[V2: ClassTag, V3: ClassTag]
+  override def leftJoin[V2: ClassTag, V3: ClassTag]
       (other: Iterator[(K, V2)])
       (f: (K, V, Option[V2]) => V3): IndexedRDDPartition[K, V3] =
-    leftOuterJoin(PARTPartition(other))(f)
+    leftJoin(PARTPartition(other))(f)
 
   override def innerJoin[U: ClassTag, V2: ClassTag]
       (other: IndexedRDDPartition[K, U])
@@ -194,6 +199,15 @@ private[indexedrdd] class PARTPartition[K, V]
       (other: Iterator[(K, U)])
       (f: (K, V, U) => V2): IndexedRDDPartition[K, V2] =
     innerJoin(PARTPartition(other))(f)
+
+  override def createUsingIndex[V2: ClassTag](elems: Iterator[(K, V2)]): IndexedRDDPartition[K, V2] =
+    PARTPartition(elems)
+
+  override def aggregateUsingIndex[V2: ClassTag](
+      elems: Iterator[(K, V2)], reduceFunc: (V2, V2) => V2): IndexedRDDPartition[K, V2] =
+    PARTPartition[K, V2, V2](elems, (id, a) => a, (id, a, b) => reduceFunc(a, b))
+
+  override def reindex(): IndexedRDDPartition[K, V] = this
 }
 
 private[indexedrdd] object PARTPartition {

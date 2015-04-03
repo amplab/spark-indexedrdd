@@ -68,6 +68,18 @@ private[indexedrdd] abstract class IndexedRDDPartition[K, V] extends Serializabl
    */
   def filter(pred: (K, V) => Boolean): IndexedRDDPartition[K, V]
 
+  /**
+   * Intersects `this` and `other` and keeps only elements with differing values. For these
+   * elements, keeps the values from `this`.
+   */
+  def diff(other: IndexedRDDPartition[K, V]): IndexedRDDPartition[K, V]
+
+  /**
+   * Intersects `this` and `other` and keeps only elements with differing values. For these
+   * elements, keeps the values from `this`.
+   */
+  def diff(other: Iterator[(K, V)]): IndexedRDDPartition[K, V]
+
   /** Joins `this` with `other`, running `f` on the values of all keys in both sets. */
   def fullOuterJoin[V2: ClassTag, W: ClassTag]
       (other: IndexedRDDPartition[K, V2])
@@ -79,28 +91,30 @@ private[indexedrdd] abstract class IndexedRDDPartition[K, V] extends Serializabl
       (f: (K, Option[V], Option[V2]) => W): IndexedRDDPartition[K, W]
 
   /**
-   * Left-biased union of `this` with `other`. Runs `f` on the values of corresponding keys,
-   * preserving values in `this` with no corresponding entries in `other`.
+   * Left outer joins `this` with `other`, running `f` on the values of corresponding keys. Because
+   * values in `this` with no corresponding entries in `other` are preserved, `f` cannot change the
+   * value type.
    */
-  def union
-      (other: IndexedRDDPartition[K, V])
-      (f: (K, V, V) => V): IndexedRDDPartition[K, V]
+  def join[U: ClassTag]
+      (other: IndexedRDDPartition[K, U])
+      (f: (K, V, U) => V): IndexedRDDPartition[K, V]
 
   /**
-   * Left-biased union of `this` with `other`. Runs `f` on the values of corresponding keys,
-   * preserving values in `this` with no corresponding entries in `other`.
+   * Left outer joins `this` with `other`, running `f` on the values of corresponding keys. Because
+   * values in `this` with no corresponding entries in `other` are preserved, `f` cannot change the
+   * value type.
    */
-  def union
-      (other: Iterator[(K, V)])
-      (f: (K, V, V) => V): IndexedRDDPartition[K, V]
+  def join[U: ClassTag]
+      (other: Iterator[(K, U)])
+      (f: (K, V, U) => V): IndexedRDDPartition[K, V]
 
   /** Left outer joins `this` with `other`, running `f` on all values of `this`. */
-  def leftOuterJoin[V2: ClassTag, V3: ClassTag]
+  def leftJoin[V2: ClassTag, V3: ClassTag]
       (other: IndexedRDDPartition[K, V2])
       (f: (K, V, Option[V2]) => V3): IndexedRDDPartition[K, V3]
 
   /** Left outer joins `this` with `other`, running `f` on all values of `this`. */
-  def leftOuterJoin[V2: ClassTag, V3: ClassTag]
+  def leftJoin[V2: ClassTag, V3: ClassTag]
       (other: Iterator[(K, V2)])
       (f: (K, V, Option[V2]) => V3): IndexedRDDPartition[K, V3]
 
@@ -114,4 +128,20 @@ private[indexedrdd] abstract class IndexedRDDPartition[K, V] extends Serializabl
       (other: Iterator[(K, U)])
       (f: (K, V, U) => V2): IndexedRDDPartition[K, V2]
 
+  /**
+   * Creates a new partition with values from `elems` that may share an index with `this`,
+   * merging duplicate keys in `elems` arbitrarily.
+   */
+  def createUsingIndex[V2: ClassTag](elems: Iterator[(K, V2)]): IndexedRDDPartition[K, V2]
+
+  /** Creates a new partition with values from `elems` that shares an index with `this`. */
+  def aggregateUsingIndex[V2: ClassTag](
+      elems: Iterator[(K, V2)], reduceFunc: (V2, V2) => V2): IndexedRDDPartition[K, V2]
+
+  /**
+   * Optionally rebuilds the indexes of this partition. Depending on the implementation, this may
+   * remove tombstoned entries and the resulting partition may support efficient joins with the
+   * original one.
+   */
+  def reindex(): IndexedRDDPartition[K, V]
 }

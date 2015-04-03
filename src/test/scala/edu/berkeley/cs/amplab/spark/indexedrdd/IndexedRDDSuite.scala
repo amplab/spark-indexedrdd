@@ -79,6 +79,32 @@ abstract class IndexedRDDSuite extends FunSuite with SharedSparkContext {
     assert(sum2.collect.toSet === expected)
   }
 
+  test("leftJoin") {
+    val n = 100
+    val ps = pairs(sc, n).cache()
+    val evens = ps.filter(q => ((q._2 % 2) == 0)).cache()
+    // leftJoin with another IndexedRDD
+    assert(ps.leftJoin(evens) { (id, a, bOpt) => a - bOpt.getOrElse(0) }.collect.toSet ===
+      (0 to n by 2).map(x => (x.toLong, 0)).toSet ++ (1 to n by 2).map(x => (x.toLong, x)).toSet)
+    // leftJoin with an RDD
+    val evensRDD = evens.map(identity)
+    assert(ps.leftJoin(evensRDD) { (id, a, bOpt) => a - bOpt.getOrElse(0) }.collect.toSet ===
+      (0 to n by 2).map(x => (x.toLong, 0)).toSet ++ (1 to n by 2).map(x => (x.toLong, x)).toSet)
+  }
+
+  test("join") {
+    val n = 100
+    val ps = pairs(sc, n).cache()
+    val evens = ps.filter(q => ((q._2 % 2) == 0)).cache()
+    // join with another IndexedRDD
+    assert(ps.join(evens) { (id, a, b) => a - b }.collect.toSet ===
+      (0 to n by 2).map(x => (x.toLong, 0)).toSet ++ (1 to n by 2).map(x => (x.toLong, x)).toSet)
+    // join with an RDD
+    val evensRDD = evens.map(identity)
+    assert(ps.join(evensRDD) { (id, a, b) => a - b }.collect.toSet ===
+      (0 to n by 2).map(x => (x.toLong, 0)).toSet ++ (1 to n by 2).map(x => (x.toLong, x)).toSet)
+  }
+
   test("innerJoin") {
     val n = 100
     val ps = pairs(sc, n).cache()
@@ -90,6 +116,19 @@ abstract class IndexedRDDSuite extends FunSuite with SharedSparkContext {
     val evensRDD = evens.map(identity)
     assert(ps.innerJoin(evensRDD) { (id, a, b) => a - b }.collect.toSet ===
      (0 to n by 2).map(x => (x.toLong, 0)).toSet)
+  }
+
+  test("aggregateUsingIndex") {
+    val n = 100
+    val ps = pairs(sc, n)
+    val messageTargets = (0 to n) ++ (0 to n by 2)
+    val messages = sc.parallelize(messageTargets.map(x => (x.toLong, 1)))
+    assert(ps.aggregateUsingIndex[Int](messages, _ + _).collect.toSet ===
+      (0 to n).map(x => (x.toLong, if (x % 2 == 0) 2 else 1)).toSet)
+
+    val messagesWithNew = List((0L, 1), (-1L, 1))
+    assert(ps.aggregateUsingIndex[Int](sc.parallelize(messagesWithNew), _ + _).collect.toSet ===
+      messagesWithNew.toSet)
   }
 }
 
