@@ -58,6 +58,32 @@ abstract class IndexedRDDSuite extends FunSuite with SharedSparkContext {
     assert(negatives.count === n + 1)
   }
 
+  test("diff") {
+    val n = 100
+    val ps = pairs(sc, n).cache()
+    val flipEvens = ps.mapValues(x => if (x % 2 == 0) -x else x).cache()
+    // diff should keep only the changed values
+    assert(ps.diff(flipEvens).map(_._2).collect().toSet === (2 to n by 2).toSet)
+  }
+
+  test("diff with pair RDD") {
+    val n = 100
+    val ps = pairs(sc, n).cache()
+    val flipEvens: RDD[(Long, Int)] =
+      sc.parallelize(0L to 100L)
+        .map(id => if (id % 2 == 0) (id, -id.toInt) else (id, id.toInt)).cache()
+    // diff should keep only the changed values
+    assert(ps.diff(flipEvens).map(_._2).collect().toSet === (2 to n by 2).toSet)
+  }
+
+  test("diff with non-equal number of partitions") {
+    val a = create(sc.parallelize(0 until 24, 3).map(i => (i.toLong, 0)))
+    val b = create(sc.parallelize(8 until 16, 2).map(i => (i.toLong, 1)))
+    assert(a.partitions.size != b.partitions.size)
+    val c = b.diff(a)
+    assert(c.map(_._1).collect.toSet === (8 until 16).toSet)
+  }
+
   test("fullOuterJoin") {
     val n = 200
     val bStart = 50
@@ -92,6 +118,17 @@ abstract class IndexedRDDSuite extends FunSuite with SharedSparkContext {
       (0 to n by 2).map(x => (x.toLong, 0)).toSet ++ (1 to n by 2).map(x => (x.toLong, x)).toSet)
   }
 
+  test("leftJoin vertices with non-equal number of partitions") {
+    val a = create(sc.parallelize(0 until 100, 2).map(i => (i.toLong, 1)))
+    val b = create(
+      a.filter(v => v._1 % 2 == 0).partitionBy(new HashPartitioner(3)))
+    assert(a.partitions.size != b.partitions.size)
+    val c = a.leftJoin(b) { (vid, old, newOpt) =>
+      old - newOpt.getOrElse(0)
+    }
+    assert(c.filter(v => v._2 != 0).map(_._1).collect.toSet == (1 to 99 by 2).toSet)
+  }
+
   test("join") {
     val n = 100
     val ps = pairs(sc, n).cache()
@@ -116,6 +153,17 @@ abstract class IndexedRDDSuite extends FunSuite with SharedSparkContext {
     val evensRDD = evens.map(identity)
     assert(ps.innerJoin(evensRDD) { (id, a, b) => a - b }.collect.toSet ===
      (0 to n by 2).map(x => (x.toLong, 0)).toSet)
+  }
+
+  test("innerJoin with non-equal number of partitions") {
+    val a = create(sc.parallelize(0 until 100, 2).map(i => (i.toLong, 1)))
+    val b = create(
+      a.filter(v => v._1 % 2 == 0).partitionBy(new HashPartitioner(3)))
+    assert(a.partitions.size != b.partitions.size)
+    val c = a.innerJoin(b) { (vid, old, newVal) =>
+      old - newVal
+    }
+    assert(c.filter(v => v._2 == 0).map(_._1).collect.toSet == (0 to 98 by 2).toSet)
   }
 
   test("aggregateUsingIndex") {
