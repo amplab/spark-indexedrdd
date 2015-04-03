@@ -65,6 +65,14 @@ private[indexedrdd] class PARTPartition[K, V]
     this.withMap[V](newMap)
   }
 
+  override def delete(ks: Iterator[K]): IndexedRDDPartition[K, V] = {
+    val newMap = map.snapshot()
+    for (k <- ks) {
+      newMap.delete(kSer.toBytes(k))
+    }
+    this.withMap[V](newMap)
+  }
+
   override def mapValues[V2: ClassTag](f: (K, V) => V2): IndexedRDDPartition[K, V2] = {
     val newMap = new ArtTree
     for (kv <- rawIterator) newMap.insert(kv._1, f(kSer.fromBytes(kv._1), kv._2))
