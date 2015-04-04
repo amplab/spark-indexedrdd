@@ -419,4 +419,5 @@ object IndexedRDD {
   }
 
   implicit val longSer = new LongSerializer
+  implicit val stringSer = new StringSerializer
 }
