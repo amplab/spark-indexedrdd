@@ -257,7 +257,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
 
   /**
    * Optionally rebuilds the indexes of this IndexedRDD. Depending on the implementation, this may
-   * remove tombstoned entries and the resulting IndexedRDD may support efficient joins with the
+   * remove tombstoned entries and the resulting IndexedRDD may not support efficient joins with the
    * original one.
    */
   def reindex(): IndexedRDD[K, V] = this.mapIndexedRDDPartitions(_.reindex())
@@ -398,6 +398,12 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
 }
 
 object IndexedRDD {
+  /**
+   * Constructs an updatable IndexedRDD from an RDD of pairs, merging duplicate keys arbitrarily.
+   */
+  def apply[K: ClassTag : KeySerializer, V: ClassTag]
+      (elems: RDD[(K, V)]): IndexedRDD[K, V] = updatable(elems)
+
   /**
    * Constructs an updatable IndexedRDD from an RDD of pairs, merging duplicate keys arbitrarily.
    */
