@@ -18,14 +18,19 @@
 package edu.berkeley.cs.amplab.spark.indexedrdd
 
 import scala.collection.immutable.LongMap
+import scala.reflect.ClassTag
+import org.apache.spark.HashPartitioner
 
 import org.apache.spark.SparkContext
+import org.apache.spark.rdd.RDD
 import org.scalatest.FunSuite
 
-class IndexedRDDSuite extends FunSuite with SharedSparkContext {
+abstract class IndexedRDDSuite extends FunSuite with SharedSparkContext {
+
+  def create[V: ClassTag](elems: RDD[(Long, V)]): IndexedRDD[Long, V]
 
   def pairs(sc: SparkContext, n: Int) = {
-    IndexedRDD(sc.parallelize((0 to n).map(x => (x.toLong, x)), 5))
+    create(sc.parallelize((0 to n).map(x => (x.toLong, x)), 5))
   }
 
   test("get, multiget") {
@@ -37,28 +42,6 @@ class IndexedRDDSuite extends FunSuite with SharedSparkContext {
     val evens = ps.filter(q => ((q._2 % 2) == 0)).cache()
     assert(evens.multiget(Array(-1L, 0L, 1L, 98L)) === LongMap(0L -> 0, 98L -> 98))
     assert(evens.get(97L) === None)
-  }
-
-  test("put, multiput") {
-    val n = 100
-    val ps = pairs(sc, n).cache()
-    assert(ps.multiput(Map(0L -> 1, 1L -> 1), SumFunction).collect.toSet ===
-      Set(0L -> 1, 1L -> 2) ++ (2 to n).map(x => (x.toLong, x)).toSet)
-    assert(ps.multiput(Map(-1L -> -1, 0L -> 1), SumFunction).collect.toSet ===
-      Set(-1L -> -1, 0L -> 1) ++ (1 to n).map(x => (x.toLong, x)).toSet)
-    assert(ps.multiput(Map(-1L -> -1, 0L -> 1, 1L -> 1)).collect.toSet ===
-      Set(-1L -> -1, 0L -> 1, 1L -> 1) ++ (2 to n).map(x => (x.toLong, x)).toSet)
-    assert(ps.put(-1L, -1).collect.toSet ===
-      Set(-1L -> -1) ++ (0 to n).map(x => (x.toLong, x)).toSet)
-    assert(ps.put(0L, 1).collect.toSet ===
-      Set(0L -> 1) ++ (1 to n).map(x => (x.toLong, x)).toSet)
-  }
-
-  test("delete") {
-    val n = 100
-    val ps = pairs(sc, n).cache()
-    assert(ps.delete(Array(0L)).collect.toSet === (1 to n).map(x => (x.toLong, x)).toSet)
-    assert(ps.delete(Array(-1L)).collect.toSet === (0 to n).map(x => (x.toLong, x)).toSet)
   }
 
   test("filter") {
@@ -79,17 +62,33 @@ class IndexedRDDSuite extends FunSuite with SharedSparkContext {
     val n = 100
     val ps = pairs(sc, n).cache()
     val flipEvens = ps.mapValues(x => if (x % 2 == 0) -x else x).cache()
-    // diff should keep only the changed pairs
-    assert(flipEvens.diff(ps).map(_._2).collect().toList.sorted === (2 to n by 2).map(-_).toList.sorted)
-    // diff should keep the values from `this`
-    assert(ps.diff(flipEvens).map(_._2).collect().toList.sorted === (2 to n by 2).toList.sorted)
+    // diff should keep only the changed values
+    assert(ps.diff(flipEvens).map(_._2).collect().toSet === (2 to n by 2).toSet)
+  }
+
+  test("diff with pair RDD") {
+    val n = 100
+    val ps = pairs(sc, n).cache()
+    val flipEvens: RDD[(Long, Int)] =
+      sc.parallelize(0L to 100L)
+        .map(id => if (id % 2 == 0) (id, -id.toInt) else (id, id.toInt)).cache()
+    // diff should keep only the changed values
+    assert(ps.diff(flipEvens).map(_._2).collect().toSet === (2 to n by 2).toSet)
+  }
+
+  test("diff with non-equal number of partitions") {
+    val a = create(sc.parallelize(0 until 24, 3).map(i => (i.toLong, 0)))
+    val b = create(sc.parallelize(8 until 16, 2).map(i => (i.toLong, 1)))
+    assert(a.partitions.size != b.partitions.size)
+    val c = b.diff(a)
+    assert(c.map(_._1).collect.toSet === (8 until 16).toSet)
   }
 
   test("fullOuterJoin") {
     val n = 200
     val bStart = 50
     val aEnd = 100
-    val common = IndexedRDD(sc.parallelize((0 until n).map(x => (x.toLong, x)), 5)).cache()
+    val common = create(sc.parallelize((0 until n).map(x => (x.toLong, x)), 5)).cache()
     val a = common.filter(kv => kv._1 < aEnd).cache()
     val b = common.filter(kv => kv._1 >= bStart).cache()
     val sum = a.fullOuterJoin(b) { (id, aOpt, bOpt) => aOpt.getOrElse(0) + bOpt.getOrElse(0) }
@@ -101,7 +100,7 @@ class IndexedRDDSuite extends FunSuite with SharedSparkContext {
     assert(sum.collect.toSet === expected)
 
     // fullOuterJoin with another IndexedRDD with a different index
-    val b2 = IndexedRDD(b.map(identity))
+    val b2 = create(b.map(identity))
     val sum2 = a.fullOuterJoin(b2) { (id, aOpt, bOpt) => aOpt.getOrElse(0) + bOpt.getOrElse(0) }
     assert(sum2.collect.toSet === expected)
   }
@@ -117,6 +116,17 @@ class IndexedRDDSuite extends FunSuite with SharedSparkContext {
     val evensRDD = evens.map(identity)
     assert(ps.leftJoin(evensRDD) { (id, a, bOpt) => a - bOpt.getOrElse(0) }.collect.toSet ===
       (0 to n by 2).map(x => (x.toLong, 0)).toSet ++ (1 to n by 2).map(x => (x.toLong, x)).toSet)
+  }
+
+  test("leftJoin vertices with non-equal number of partitions") {
+    val a = create(sc.parallelize(0 until 100, 2).map(i => (i.toLong, 1)))
+    val b = create(
+      a.filter(v => v._1 % 2 == 0).partitionBy(new HashPartitioner(3)))
+    assert(a.partitions.size != b.partitions.size)
+    val c = a.leftJoin(b) { (vid, old, newOpt) =>
+      old - newOpt.getOrElse(0)
+    }
+    assert(c.filter(v => v._2 != 0).map(_._1).collect.toSet == (1 to 99 by 2).toSet)
   }
 
   test("join") {
@@ -145,6 +155,17 @@ class IndexedRDDSuite extends FunSuite with SharedSparkContext {
      (0 to n by 2).map(x => (x.toLong, 0)).toSet)
   }
 
+  test("innerJoin with non-equal number of partitions") {
+    val a = create(sc.parallelize(0 until 100, 2).map(i => (i.toLong, 1)))
+    val b = create(
+      a.filter(v => v._1 % 2 == 0).partitionBy(new HashPartitioner(3)))
+    assert(a.partitions.size != b.partitions.size)
+    val c = a.innerJoin(b) { (vid, old, newVal) =>
+      old - newVal
+    }
+    assert(c.filter(v => v._2 == 0).map(_._1).collect.toSet == (0 to 98 by 2).toSet)
+  }
+
   test("aggregateUsingIndex") {
     val n = 100
     val ps = pairs(sc, n)
@@ -159,7 +180,36 @@ class IndexedRDDSuite extends FunSuite with SharedSparkContext {
   }
 }
 
+class UpdatableIndexedRDDSuite extends IndexedRDDSuite {
+  override def create[V: ClassTag](elems: RDD[(Long, V)]): IndexedRDD[Long, V] = {
+    import IndexedRDD._
+    IndexedRDD.updatable(elems)
+  }
+
+  test("put, multiput") {
+    val n = 100
+    val ps = pairs(sc, n).cache()
+    assert(ps.multiput[Int](Map(0L -> 1, 1L -> 1), (id, a) => a, SumFunction).collect.toSet ===
+      Set(0L -> 1, 1L -> 2) ++ (2 to n).map(x => (x.toLong, x)).toSet)
+    assert(ps.multiput[Int](Map(-1L -> -1, 0L -> 1), (id, a) => a, SumFunction).collect.toSet ===
+      Set(-1L -> -1, 0L -> 1) ++ (1 to n).map(x => (x.toLong, x)).toSet)
+    assert(ps.multiput(Map(-1L -> -1, 0L -> 1, 1L -> 1)).collect.toSet ===
+      Set(-1L -> -1, 0L -> 1, 1L -> 1) ++ (2 to n).map(x => (x.toLong, x)).toSet)
+    assert(ps.put(-1L, -1).collect.toSet ===
+      Set(-1L -> -1) ++ (0 to n).map(x => (x.toLong, x)).toSet)
+    assert(ps.put(0L, 1).collect.toSet ===
+      Set(0L -> 1) ++ (1 to n).map(x => (x.toLong, x)).toSet)
+  }
+
+  test("delete") {
+    val n = 100
+    val ps = pairs(sc, n).cache()
+    assert(ps.delete(Array(0L)).collect.toSet === (1 to n).map(x => (x.toLong, x)).toSet)
+    assert(ps.delete(Array(-1L)).collect.toSet === (0 to n).map(x => (x.toLong, x)).toSet)
+  }
+}
+
 // Declared outside of test suite to avoid closure capture
-private object SumFunction extends Function3[IndexedRDD.Id, Int, Int, Int] with Serializable {
-  def apply(id: IndexedRDD.Id, a: Int, b: Int) = a + b
+private object SumFunction extends Function3[Long, Int, Int, Int] with Serializable {
+  def apply(id: Long, a: Int, b: Int) = a + b
 }
