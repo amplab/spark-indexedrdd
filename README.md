@@ -2,7 +2,7 @@
 
 An efficient updatable key-value store for [Apache Spark](http://spark.apache.org).
 
-IndexedRDD extends `RDD[(Long, V)]` by enforcing key uniqueness and pre-indexing the entries for efficient joins and point lookups, updates, and deletions. It is implemented by (1) hash-partitioning the entries by key, (2) maintaining a hash index within each partition, and (3) using purely functional (immutable and efficiently updatable) data structures to enable efficient modifications and deletions.
+IndexedRDD extends `RDD[(K, V)]` by enforcing key uniqueness and pre-indexing the entries for efficient joins and point lookups, updates, and deletions. It is implemented by (1) hash-partitioning the entries by key, (2) maintaining a radix tree ([PART](https://github.com/ankurdave/part)) index within each partition, and (3) using this immutable and efficiently updatable data structure to enable efficient modifications and deletions.
 
 ## Usage
 
@@ -11,13 +11,14 @@ Add the dependency to your SBT project by adding the following to `build.sbt` (s
 ```scala
 resolvers += "Spark Packages Repo" at "http://dl.bintray.com/spark-packages/maven"
 
-libraryDependencies += "amplab" % "spark-indexedrdd" % "0.1"
+libraryDependencies += "amplab" % "spark-indexedrdd" % "0.2"
 ```
 
 Then use IndexedRDD as follows:
 
 ```scala
 import edu.berkeley.cs.amplab.spark.indexedrdd.IndexedRDD
+import edu.berkeley.cs.amplab.spark.indexedrdd.IndexedRDD._
 
 // Create an RDD of key-value pairs with Long keys.
 val rdd = sc.parallelize((1 to 1000000).map(x => (x.toLong, 0)))

@@ -1,6 +1,6 @@
 name := "spark-indexedrdd"
 
-version := "0.2-SNAPSHOT"
+version := "0.2"
 
 organization := "edu.berkeley.cs.amplab"
 
@@ -8,7 +8,7 @@ scalaVersion := "2.10.4"
 
 spName := "amplab/spark-indexedrdd"
 
-sparkVersion := "1.3.0"
+sparkVersion := "1.4.1"
 
 sparkComponents += "core"
 
