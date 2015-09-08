@@ -118,6 +118,16 @@ private[indexedrdd] abstract class IndexedRDDPartition[K, V] extends Serializabl
       (other: Iterator[(K, V2)])
       (f: (K, V, Option[V2]) => V3): IndexedRDDPartition[K, V3]
 
+  /** Right outer joins `this` with `other`, running `f` on all values of `this`. */
+  def rightJoin[V2: ClassTag, V3: ClassTag]
+      (other: IndexedRDDPartition[K, V2])
+      (f: (K, V2, Option[V]) => V3): IndexedRDDPartition[K, V3]
+
+  /** Right outer joins `this` with `other`, running `f` on all values of `this`. */
+  def rightJoin[V2: ClassTag, V3: ClassTag]
+      (other: Iterator[(K, V2)])
+      (f: (K, V2, Option[V]) => V3): IndexedRDDPartition[K, V3]
+
   /** Inner joins `this` with `other`, running `f` on the values of corresponding keys. */
   def innerJoin[U: ClassTag, V2: ClassTag]
       (other: IndexedRDDPartition[K, U])
