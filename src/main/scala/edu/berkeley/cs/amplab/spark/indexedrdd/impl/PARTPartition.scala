@@ -180,24 +180,8 @@ private[indexedrdd] class PARTPartition[K, V]
     leftJoin(PARTPartition(other))(f)
 
   override def rightJoin[V2: ClassTag, V3: ClassTag]
-      (other: IndexedRDDPartition[K, V2])
-      (f: (K, V2, Option[V]) => V3): IndexedRDDPartition[K, V3] = other match {
-    case other: PARTPartition[K, V2] =>
-      // Scan `this` and probe `other`
-      val newMap = new ArtTree
-      for (kv <- other.rawIterator) {
-        val newV = f(kSer.fromBytes(kv._1), kv._2, Option(map.search(kv._1).asInstanceOf[V]))
-        newMap.insert(kv._1, newV)
-      }
-      this.withMap[V3](newMap)
-
-    case _ =>
-      rightJoin(other.iterator)(f)
-  }
-
-  override def rightJoin[V2: ClassTag, V3: ClassTag]
       (other: Iterator[(K, V2)])
-      (f: (K, V2, Option[V]) => V3): IndexedRDDPartition[K, V3] =
+      (f: (K, Option[V], V2) => V3): IndexedRDDPartition[K, V3] =
     rightJoin(PARTPartition(other))(f)
 
   override def innerJoin[U: ClassTag, V2: ClassTag]

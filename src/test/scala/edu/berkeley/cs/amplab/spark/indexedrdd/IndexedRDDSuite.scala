@@ -134,11 +134,11 @@ abstract class IndexedRDDSuite extends FunSuite with SharedSparkContext {
     val ps = pairs(sc, n).cache()
     val evens = ps.filter(q => ((q._2 % 2) == 0)).cache()
     // rightJoin with another IndexedRDD
-    assert(evens.rightJoin(ps) { (id, a, bOpt) => a - bOpt.getOrElse(0) }.collect.toSet ===
+    assert(evens.rightJoin(ps) { (id, aOpt, b) => b - aOpt.getOrElse(0) }.collect.toSet ===
       (0 to n by 2).map(x => (x.toLong, 0)).toSet ++ (1 to n by 2).map(x => (x.toLong, x)).toSet)
     // rightJoin with an RDD
     val psRDD = ps.map(identity)
-    assert(evens.rightJoin(psRDD) { (id, a, bOpt) => a - bOpt.getOrElse(0) }.collect.toSet ===
+    assert(evens.rightJoin(psRDD) { (id, aOpt, b) => b - aOpt.getOrElse(0) }.collect.toSet ===
       (0 to n by 2).map(x => (x.toLong, 0)).toSet ++ (1 to n by 2).map(x => (x.toLong, x)).toSet)
   }
 
@@ -147,7 +147,7 @@ abstract class IndexedRDDSuite extends FunSuite with SharedSparkContext {
     val b = create(
       a.filter(v => v._1 % 2 == 0).partitionBy(new HashPartitioner(3)))
     assert(a.partitions.size != b.partitions.size)
-    val c = b.rightJoin(a) { (vid, old, newOpt) =>
+    val c = b.rightJoin(a) { (vid, newOpt, old) =>
       old - newOpt.getOrElse(0)
     }
     assert(c.filter(v => v._2 != 0).map(_._1).collect.toSet == (1 to 99 by 2).toSet)

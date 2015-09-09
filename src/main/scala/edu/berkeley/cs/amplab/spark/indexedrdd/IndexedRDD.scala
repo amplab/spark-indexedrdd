@@ -232,9 +232,9 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
       this.zipPartitionsWithOther(other)(new OtherLeftJoinZipper(f))
   }
 
-  /** Right outer joins `this` with `other`, running `f` on all values of `this`. */
+  /** Right outer joins `this` with `other`, running `f` on all values of `other`. */
   def rightJoin[V2: ClassTag, V3: ClassTag]
-      (other: RDD[(K, V2)])(f: (K, V2, Option[V]) => V3): IndexedRDD[K, V3] = other match {
+      (other: RDD[(K, V2)])(f: (K, Option[V], V2) => V3): IndexedRDD[K, V3] = other match {
     case other: IndexedRDD[K, V2] if partitioner == other.partitioner =>
       this.zipIndexedRDDPartitions(other)(new RightJoinZipper(f))
     case _ =>
@@ -369,7 +369,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
     }
   }
 
-  private class RightJoinZipper[V2: ClassTag, V3: ClassTag](f: (K, V2, Option[V]) => V3)
+  private class RightJoinZipper[V2: ClassTag, V3: ClassTag](f: (K, Option[V], V2) => V3)
       extends ZipPartitionsFunction[V2, V3] with Serializable {
     def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[IndexedRDDPartition[K, V2]]): Iterator[IndexedRDDPartition[K, V3]] = {
       val thisPart = thisIter.next()
@@ -378,7 +378,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
     }
   }
 
-  private class OtherRightJoinZipper[V2: ClassTag, V3: ClassTag](f: (K, V2, Option[V]) => V3)
+  private class OtherRightJoinZipper[V2: ClassTag, V3: ClassTag](f: (K, Option[V], V2) => V3)
       extends OtherZipPartitionsFunction[V2, V3] with Serializable {
     def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[(K, V2)]): Iterator[IndexedRDDPartition[K, V3]] = {
       val thisPart = thisIter.next()
