@@ -8,7 +8,7 @@ scalaVersion := "2.10.4"
 
 spName := "amplab/spark-indexedrdd"
 
-sparkVersion := "1.4.1"
+sparkVersion := "1.5.0"
 
 sparkComponents += "core"
 
