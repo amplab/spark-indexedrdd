@@ -84,3 +84,36 @@ class StringSerializer extends KeySerializer[String] {
     new String(result)
   }
 }
+
+class Tuple2Serializer[A, B](
+    implicit aSer: KeySerializer[A], bSer: KeySerializer[B])
+  extends KeySerializer[(A, B)] {
+
+  override def toBytes(k: (A, B)) = {
+    val aBytes = aSer.toBytes(k._1)
+    val bBytes = bSer.toBytes(k._2)
+
+    val result = new Array[Byte](4 + aBytes.length + bBytes.length)
+
+    // Prepend the length of aBytes so we know where the boundary is when reading
+    result(0) = ((aBytes.length >> 24) & 0xFF).toByte
+    result(1) = ((aBytes.length >> 16) & 0xFF).toByte
+    result(2) = ((aBytes.length >>  8) & 0xFF).toByte
+    result(3) = ( aBytes.length        & 0xFF).toByte
+
+    aBytes.copyToArray(result, 4)
+    bBytes.copyToArray(result, 4 + aBytes.length)
+
+    result
+  }
+
+  override def fromBytes(b: Array[Byte]): (A, B) = {
+    val aLength =
+      ( (b(0).toInt << 24) & (0xFF << 24) |
+        (b(1).toInt << 16) & (0xFF << 16) |
+        (b(2).toInt <<  8) & (0xFF <<  8) |
+         b(3).toInt        &  0xFF)
+    (aSer.fromBytes(b.slice(4, 4 + aLength)),
+      bSer.fromBytes(b.drop(4 + aLength)))
+  }
+}
