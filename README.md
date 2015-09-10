@@ -11,7 +11,7 @@ Add the dependency to your SBT project by adding the following to `build.sbt` (s
 ```scala
 resolvers += "Spark Packages Repo" at "http://dl.bintray.com/spark-packages/maven"
 
-libraryDependencies += "amplab" % "spark-indexedrdd" % "0.2"
+libraryDependencies += "amplab" % "spark-indexedrdd" % "0.3"
 ```
 
 Then use IndexedRDD as follows:
