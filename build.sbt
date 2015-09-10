@@ -32,7 +32,7 @@ pomExtra := (
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.4" % "test"
 
-resolvers += "Repo at github.com/ankurdave/maven-repo" at "https://github.com/ankurdave/maven-repo/raw/master"
+resolvers += "Repo at github.com/ankurdave/maven-repo" at "https://raw.githubusercontent.com/ankurdave/maven-repo/master"
 
 libraryDependencies += "com.ankurdave" %% "part" % "0.1"
 
