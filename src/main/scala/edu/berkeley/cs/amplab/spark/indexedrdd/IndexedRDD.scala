@@ -85,7 +85,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
         if (partIter.hasNext && ksByPartition.contains(context.partitionId)) {
           val part = partIter.next()
           val ksForPartition = ksByPartition.get(context.partitionId).get
-          part.multiget(ksForPartition.iterator).toArray
+          part.multiget(ksForPartition).toArray
         } else {
           Array.empty
         }
@@ -200,12 +200,23 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
    * Joins `this` with `other`, running `f` on the values of all keys in both sets. Note that for
    * efficiency `other` must be an IndexedRDD, not just a pair RDD. Use [[aggregateUsingIndex]] to
    * construct an IndexedRDD co-partitioned with `this`.
+   * 
+   * @param maybeLazy if true, a joined "view" of the input RDDs (that preserves the underlying
+   * indices) may be returned
    */
   def fullOuterJoin[V2: ClassTag, W: ClassTag]
-      (other: RDD[(K, V2)])
+      (other: RDD[(K, V2)], maybeLazy: Boolean = false)
       (f: (K, Option[V], Option[V2]) => W): IndexedRDD[K, W] = other match {
-    case other: IndexedRDD[K, V2] if partitioner == other.partitioner =>
-      this.zipIndexedRDDPartitions(other)(new FullOuterJoinZipper(f))
+    case other: IndexedRDD[K, V2] if partitioner == other.partitioner => {
+        val castFn = implicitly[ClassTag[(K, Option[V], Option[V]) => V]]
+        val castRDD = implicitly[ClassTag[IndexedRDD[K, V]]]
+        (other, f) match {
+          case (castRDD(other), castFn(f)) if maybeLazy =>
+            this.zipIndexedRDDPartitions(other)(new LazyFullOuterJoinZipper(f)).asInstanceOf[IndexedRDD[K, W]]
+          case (other, f) =>
+            this.zipIndexedRDDPartitions(other)(new FullOuterJoinZipper(f))
+        }
+      }
     case _ =>
       this.zipPartitionsWithOther(other)(new OtherFullOuterJoinZipper(f))
   }
@@ -313,6 +324,26 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
       val thisPart = thisIter.next()
       val otherPart = otherIter.next()
       Iterator(thisPart.fullOuterJoin(otherPart)(f))
+    }
+  }
+  
+  private class LazyFullOuterJoinZipper(f: (K, Option[V], Option[V]) => V)
+      extends ZipPartitionsFunction[V, V] with Serializable {
+    def apply(
+        thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[IndexedRDDPartition[K, V]])
+        : Iterator[IndexedRDDPartition[K, V]] = {
+      val thisPart = thisIter.next()
+      val otherPart = otherIter.next()
+      (thisPart, otherPart) match {
+        case (thisPart: LazyPartition[K, V], otherPart: LazyPartition[K, V]) if thisPart.reducer == f && otherPart.reducer == f =>
+          Iterator(new LazyPartition(thisPart.partitions ++ otherPart.partitions, f))
+        case (thisPart: LazyPartition[K, V], _) if thisPart.reducer == f =>
+          Iterator(new LazyPartition(thisPart.partitions :+ otherPart, f))
+        case (_, otherPart: LazyPartition[K, V]) if otherPart.reducer == f =>
+          Iterator(new LazyPartition(thisPart +: otherPart.partitions, f))
+        case _ =>
+          Iterator(new LazyPartition(Seq(thisPart, otherPart), f))
+      }
     }
   }
 

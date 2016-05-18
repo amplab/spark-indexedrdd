@@ -41,11 +41,32 @@ abstract class IndexedRDDPartitionSuite extends FunSuite {
       assert(vpSer.iterator.toSet === elems)
     }
   }
+  
+  test("get") {
+    val elems = Set((0L, 1), (1L, 1), (2L, 1))
+    val vp = create(elems.iterator)
+    assert(vp(0L) == Some(1))
+    assert(vp(1L) == Some(1))
+    assert(vp(2L) == Some(1))
+    assert(vp(3L) == None)
+    
+    assert(vp.multiget(Array(1L, 2L, 3L)).size == 2)
+  }
 }
 
 class PARTPartitionSuite extends IndexedRDDPartitionSuite {
   override def create[V: ClassTag](iter: Iterator[(Long, V)]) = {
     import IndexedRDD._
     PARTPartition(iter)
+  }
+}
+
+class LazyPartitionSuite extends IndexedRDDPartitionSuite {
+  override def create[V: ClassTag](iter: Iterator[(Long, V)]) = {
+    import IndexedRDD._
+    val it = iter.toSeq
+    new LazyPartition(
+      Seq(PARTPartition(it.iterator), PARTPartition(it.iterator)),
+      (id, a, b) => (a ++ b).headOption.getOrElse(null.asInstanceOf[V]))
   }
 }
