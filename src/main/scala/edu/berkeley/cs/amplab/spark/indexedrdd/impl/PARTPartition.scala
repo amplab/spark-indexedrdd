@@ -40,9 +40,7 @@ private[indexedrdd] class PARTPartition[K, V]
 
   override def size: Long = map.size()
 
-  override def apply(k: K): V = map.search(kSer.toBytes(k)).asInstanceOf[V]
-
-  override def isDefined(k: K): Boolean = map.search(kSer.toBytes(k)) != null
+  override def apply(k: K): Option[V] = Option(map.search(kSer.toBytes(k)).asInstanceOf[V])
 
   override def iterator: Iterator[(K, V)] =
     map.iterator.map(kv => (kSer.fromBytes(kv._1), kv._2.asInstanceOf[V]))
@@ -50,8 +48,8 @@ private[indexedrdd] class PARTPartition[K, V]
   private def rawIterator: Iterator[(Array[Byte], V)] =
     map.iterator.map(kv => (kv._1, kv._2.asInstanceOf[V]))
 
-  override def multiget(ks: Iterator[K]): Iterator[(K, V)] =
-    ks.flatMap { k => Option(this(k)).map(v => (k, v)) }
+  override def multiget(ks: Array[K]): Iterator[(K, V)] =
+    ks.flatMap { k => this(k).map(v => (k, v)) }.iterator
 
   override def multiput[U](
       kvs: Iterator[(K, U)], z: (K, U) => V, f: (K, V, U) => V): IndexedRDDPartition[K, V] = {
