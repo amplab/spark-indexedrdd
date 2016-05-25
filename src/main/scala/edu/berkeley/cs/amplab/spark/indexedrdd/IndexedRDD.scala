@@ -18,10 +18,12 @@
 package edu.berkeley.cs.amplab.spark.indexedrdd
 
 import scala.reflect.ClassTag
+import scala.util.Random
 
 import org.apache.spark._
 import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.RDD
+import org.apache.spark.rdd.ShuffledRDD
 import org.apache.spark.storage.StorageLevel
 
 import edu.berkeley.cs.amplab.spark.indexedrdd.impl._
@@ -34,12 +36,16 @@ import edu.berkeley.cs.amplab.spark.indexedrdd.impl._
  * @tparam K the key associated with each entry in the set.
  * @tparam V the value associated with each entry in the set.
  */
-class IndexedRDD[K: ClassTag, V: ClassTag](
+class IndexedRDD[K: ClassTag : KeySerializer, V: ClassTag](
     /** The underlying representation of the IndexedRDD as an RDD of partitions. */
     private val partitionsRDD: RDD[IndexedRDDPartition[K, V]])
   extends RDD[(K, V)](partitionsRDD.context, List(new OneToOneDependency(partitionsRDD))) {
 
-  require(partitionsRDD.partitioner.isDefined)
+  require(
+    partitionsRDD.partitioner.isDefined,
+    s"$partitionsRDD needs a partitioner")
+
+  type PartitionType = IndexedRDDPartition[K, V]
 
   override val partitioner = partitionsRDD.partitioner
 
@@ -67,9 +73,13 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
     partitionsRDD.map(_.size).reduce(_ + _)
   }
 
+  private[indexedrdd] def indexedPartition(part: Partition, context: TaskContext): PartitionType = {
+    firstParent[PartitionType].iterator(part, context).next
+  }
+
   /** Provides the `RDD[(K, V)]` equivalent output. */
   override def compute(part: Partition, context: TaskContext): Iterator[(K, V)] = {
-    firstParent[IndexedRDDPartition[K, V]].iterator(part, context).next.iterator
+    indexedPartition(part, context).iterator
   }
 
   /** Gets the value corresponding to the specified key, if any. */
@@ -81,7 +91,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
     val partitions = ksByPartition.keys.toSeq
     // TODO: avoid sending all keys to all partitions by creating and zipping an RDD of keys
     val results: Array[Array[(K, V)]] = context.runJob(partitionsRDD,
-      (context: TaskContext, partIter: Iterator[IndexedRDDPartition[K, V]]) => {
+      (context: TaskContext, partIter: Iterator[PartitionType]) => {
         if (partIter.hasNext && ksByPartition.contains(context.partitionId)) {
           val part = partIter.next()
           val ksForPartition = ksByPartition.get(context.partitionId).get
@@ -145,8 +155,8 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
   }
 
   /** Applies a function to each partition of this IndexedRDD. */
-  private def mapIndexedRDDPartitions[K2: ClassTag, V2: ClassTag](
-      f: IndexedRDDPartition[K, V] => IndexedRDDPartition[K2, V2]): IndexedRDD[K2, V2] = {
+  private def mapIndexedRDDPartitions[K2: ClassTag : KeySerializer, V2: ClassTag](
+      f: PartitionType => IndexedRDDPartition[K2, V2]): IndexedRDD[K2, V2] = {
     val newPartitionsRDD = partitionsRDD.mapPartitions(_.map(f), preservesPartitioning = true)
     new IndexedRDD(newPartitionsRDD)
   }
@@ -194,6 +204,18 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
       this.zipIndexedRDDPartitions(other)(new DiffZipper)
     case _ =>
       this.zipPartitionsWithOther(other)(new OtherDiffZipper)
+  }
+
+  /**
+   * Zip this entire RDD with the partitions of the given RDD, giving each zipped
+   * function access to our index via a reference to an `ReadableIndex`. This RDD
+   * is reduced to a single partition if it isn't one already. This method is a useful
+   * primitive for implementing a broadcast join.
+   */
+  def zipWithOther[V2: ClassTag, W: ClassTag]
+    (other: RDD[V2], preservesPartitioning: Boolean = false)
+    (f: (V2, ReadableIndex[K, V]) => W): RDD[W] = {
+    new ZippedIndexRDD(sparkContext, this, other, f, preservesPartitioning)
   }
 
   /**
@@ -277,32 +299,32 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
   // compiler bug related to specialization.
 
   private type ZipPartitionsFunction[V2, V3] =
-    Function2[Iterator[IndexedRDDPartition[K, V]], Iterator[IndexedRDDPartition[K, V2]],
+    Function2[Iterator[PartitionType], Iterator[IndexedRDDPartition[K, V2]],
       Iterator[IndexedRDDPartition[K, V3]]]
 
   private type OtherZipPartitionsFunction[V2, V3] =
-    Function2[Iterator[IndexedRDDPartition[K, V]], Iterator[(K, V2)],
+    Function2[Iterator[PartitionType], Iterator[(K, V2)],
       Iterator[IndexedRDDPartition[K, V3]]]
 
   private class MultiputZipper[U](z: (K, U) => V, f: (K, V, U) => V)
       extends OtherZipPartitionsFunction[U, V] with Serializable {
-    def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[(K, U)])
-      : Iterator[IndexedRDDPartition[K, V]] = {
+    def apply(thisIter: Iterator[PartitionType], otherIter: Iterator[(K, U)])
+      : Iterator[PartitionType] = {
       val thisPart = thisIter.next()
       Iterator(thisPart.multiput(otherIter, z, f))
     }
   }
 
   private class DeleteZipper extends OtherZipPartitionsFunction[Unit, V] with Serializable {
-    def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[(K, Unit)])
-      : Iterator[IndexedRDDPartition[K, V]] = {
+    def apply(thisIter: Iterator[PartitionType], otherIter: Iterator[(K, Unit)])
+      : Iterator[PartitionType] = {
       val thisPart = thisIter.next()
       Iterator(thisPart.delete(otherIter.map(_._1)))
     }
   }
 
   private class DiffZipper extends ZipPartitionsFunction[V, V] with Serializable {
-    def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[IndexedRDDPartition[K, V]]): Iterator[IndexedRDDPartition[K, V]] = {
+    def apply(thisIter: Iterator[PartitionType], otherIter: Iterator[PartitionType]): Iterator[PartitionType] = {
       val thisPart = thisIter.next()
       val otherPart = otherIter.next()
       Iterator(thisPart.diff(otherPart))
@@ -310,7 +332,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
   }
 
   private class OtherDiffZipper extends OtherZipPartitionsFunction[V, V] with Serializable {
-    def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[(K, V)]): Iterator[IndexedRDDPartition[K, V]] = {
+    def apply(thisIter: Iterator[PartitionType], otherIter: Iterator[(K, V)]): Iterator[PartitionType] = {
       val thisPart = thisIter.next()
       Iterator(thisPart.diff(otherIter))
     }
@@ -319,7 +341,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
   private class FullOuterJoinZipper[V2: ClassTag, W: ClassTag](f: (K, Option[V], Option[V2]) => W)
       extends ZipPartitionsFunction[V2, W] with Serializable {
     def apply(
-        thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[IndexedRDDPartition[K, V2]])
+        thisIter: Iterator[PartitionType], otherIter: Iterator[IndexedRDDPartition[K, V2]])
         : Iterator[IndexedRDDPartition[K, W]] = {
       val thisPart = thisIter.next()
       val otherPart = otherIter.next()
@@ -330,8 +352,8 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
   private class LazyFullOuterJoinZipper(f: (K, Option[V], Option[V]) => V)
       extends ZipPartitionsFunction[V, V] with Serializable {
     def apply(
-        thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[IndexedRDDPartition[K, V]])
-        : Iterator[IndexedRDDPartition[K, V]] = {
+        thisIter: Iterator[PartitionType], otherIter: Iterator[PartitionType])
+        : Iterator[PartitionType] = {
       val thisPart = thisIter.next()
       val otherPart = otherIter.next()
       (thisPart, otherPart) match {
@@ -350,7 +372,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
   private class OtherFullOuterJoinZipper[V2: ClassTag, W: ClassTag](f: (K, Option[V], Option[V2]) => W)
       extends OtherZipPartitionsFunction[V2, W] with Serializable {
     def apply(
-        thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[(K, V2)])
+        thisIter: Iterator[PartitionType], otherIter: Iterator[(K, V2)])
         : Iterator[IndexedRDDPartition[K, W]] = {
       val thisPart = thisIter.next()
       Iterator(thisPart.fullOuterJoin(otherIter)(f))
@@ -359,7 +381,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
 
   private class JoinZipper[U: ClassTag](f: (K, V, U) => V)
       extends ZipPartitionsFunction[U, V] with Serializable {
-    def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[IndexedRDDPartition[K, U]]): Iterator[IndexedRDDPartition[K, V]] = {
+    def apply(thisIter: Iterator[PartitionType], otherIter: Iterator[IndexedRDDPartition[K, U]]): Iterator[PartitionType] = {
       val thisPart = thisIter.next()
       val otherPart = otherIter.next()
       Iterator(thisPart.join(otherPart)(f))
@@ -368,7 +390,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
 
   private class OtherJoinZipper[U: ClassTag](f: (K, V, U) => V)
       extends OtherZipPartitionsFunction[U, V] with Serializable {
-    def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[(K, U)]): Iterator[IndexedRDDPartition[K, V]] = {
+    def apply(thisIter: Iterator[PartitionType], otherIter: Iterator[(K, U)]): Iterator[PartitionType] = {
       val thisPart = thisIter.next()
       Iterator(thisPart.join(otherIter)(f))
     }
@@ -376,7 +398,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
 
   private class LeftJoinZipper[V2: ClassTag, V3: ClassTag](f: (K, V, Option[V2]) => V3)
       extends ZipPartitionsFunction[V2, V3] with Serializable {
-    def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[IndexedRDDPartition[K, V2]]): Iterator[IndexedRDDPartition[K, V3]] = {
+    def apply(thisIter: Iterator[PartitionType], otherIter: Iterator[IndexedRDDPartition[K, V2]]): Iterator[IndexedRDDPartition[K, V3]] = {
       val thisPart = thisIter.next()
       val otherPart = otherIter.next()
       Iterator(thisPart.leftJoin(otherPart)(f))
@@ -385,7 +407,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
 
   private class OtherLeftJoinZipper[V2: ClassTag, V3: ClassTag](f: (K, V, Option[V2]) => V3)
       extends OtherZipPartitionsFunction[V2, V3] with Serializable {
-    def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[(K, V2)]): Iterator[IndexedRDDPartition[K, V3]] = {
+    def apply(thisIter: Iterator[PartitionType], otherIter: Iterator[(K, V2)]): Iterator[IndexedRDDPartition[K, V3]] = {
       val thisPart = thisIter.next()
       Iterator(thisPart.leftJoin(otherIter)(f))
     }
@@ -394,7 +416,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
   private class InnerJoinZipper[V2: ClassTag, V3: ClassTag](f: (K, V, V2) => V3)
       extends ZipPartitionsFunction[V2, V3] with Serializable {
     def apply(
-        thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[IndexedRDDPartition[K, V2]])
+        thisIter: Iterator[PartitionType], otherIter: Iterator[IndexedRDDPartition[K, V2]])
       : Iterator[IndexedRDDPartition[K, V3]] = {
       val thisPart = thisIter.next()
       val otherPart = otherIter.next()
@@ -404,7 +426,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
 
   private class OtherInnerJoinZipper[V2: ClassTag, V3: ClassTag](f: (K, V, V2) => V3)
       extends OtherZipPartitionsFunction[V2, V3] with Serializable {
-    def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[(K, V2)])
+    def apply(thisIter: Iterator[PartitionType], otherIter: Iterator[(K, V2)])
       : Iterator[IndexedRDDPartition[K, V3]] = {
       val thisPart = thisIter.next()
       Iterator(thisPart.innerJoin(otherIter)(f))
@@ -413,7 +435,7 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
 
   private class CreateUsingIndexZipper[V2: ClassTag]
       extends OtherZipPartitionsFunction[V2, V2] with Serializable {
-    def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[(K, V2)]): Iterator[IndexedRDDPartition[K, V2]] = {
+    def apply(thisIter: Iterator[PartitionType], otherIter: Iterator[(K, V2)]): Iterator[IndexedRDDPartition[K, V2]] = {
       val thisPart = thisIter.next()
       Iterator(thisPart.createUsingIndex(otherIter))
     }
@@ -421,11 +443,25 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
 
   private class AggregateUsingIndexZipper[V2: ClassTag](reduceFunc: (V2, V2) => V2)
       extends OtherZipPartitionsFunction[V2, V2] with Serializable {
-    def apply(thisIter: Iterator[IndexedRDDPartition[K, V]], otherIter: Iterator[(K, V2)]): Iterator[IndexedRDDPartition[K, V2]] = {
+    def apply(thisIter: Iterator[PartitionType], otherIter: Iterator[(K, V2)]): Iterator[IndexedRDDPartition[K, V2]] = {
       val thisPart = thisIter.next()
       Iterator(thisPart.aggregateUsingIndex(otherIter, reduceFunc))
     }
   }
+}
+
+trait ReadableIndex[K, V] {
+
+  /** Return the value for the given key. */
+  def apply(k: K): Option[V]
+
+  def isDefined(k: K): Boolean =
+    apply(k).isDefined
+
+  /**
+   * Gets the values corresponding to the specified keys, if any.
+   */
+  def multiget(ks: Array[K]): Iterator[(K, V)]
 }
 
 object IndexedRDD {

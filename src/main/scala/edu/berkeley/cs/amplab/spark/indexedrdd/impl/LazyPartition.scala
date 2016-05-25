@@ -19,11 +19,16 @@ package edu.berkeley.cs.amplab.spark.indexedrdd
 
 import scala.reflect.ClassTag
 import scala.collection.Traversable
+import org.apache.spark.Logging
+import edu.berkeley.cs.amplab.spark.indexedrdd.impl.PARTPartition
 
 /**
  * A wrapper around several IndexedRDDPartition that avoids rebuilding
  * the index for the combined partitions. Instead, each operation probes
  * the nested partitions and merges the results.
+ * 
+ * @param reducer a reduction function; at least one of the given V
+ *  Options will not be None.
  */
 
 private[indexedrdd] class LazyPartition[K, V]
@@ -36,14 +41,20 @@ private[indexedrdd] class LazyPartition[K, V]
   @transient private lazy val cached: IndexedRDDPartition[K, V] =
     partitions.reduce((a, b) => a.fullOuterJoin(b)(reducer))
   
-  def size: Long =
-    cached.size
+  /**
+   * We need to index the combined partitions in case any have duplicates
+   * we need to reduce.
+   */
+  def size: Long = cached.size
 
   /** Return the value for the given key. */
   def apply(k: K): Option[V] =
     partitions.
       map(_(k)).
-      reduce((a, b) => Option(reducer(k, a, b)))
+      reduce((a, b) => (a, b) match {
+        case (None, None) => None
+        case _ => Option(reducer(k, a, b))
+      })
 
   override def isDefined(k: K): Boolean =
     partitions.find(_.isDefined(k)).isDefined
@@ -133,4 +144,28 @@ private[indexedrdd] class LazyPartition[K, V]
    */
   def reindex(): IndexedRDDPartition[K, V] =
     partitions.map(_.reindex).reduce((a, b) => a.fullOuterJoin(b)(reducer))
+
+  /**
+   * Re-index before serialization.
+   */
+  private def writeReplace(): Object = cached
+}
+
+private[indexedrdd] object LazyPartition {
+  /**
+   * For use when we don't expect collisions here (as we can guarantee the key universes
+   * in each partition are disjoint), so doesn't lose data:
+   */
+  def apply[K: ClassTag, V: ClassTag]
+      (bits: Seq[IndexedRDDPartition[K, V]])
+      (implicit kSer: KeySerializer[K]) = bits.size match {
+    case 0 => PARTPartition(Seq.empty[(K, V)].iterator)
+    case 1 => bits.head
+    case _ => new LazyPartition(
+      bits.flatMap(_ match {
+        case it: LazyPartition[K, V] => it.partitions
+        case it => Seq(it)
+      }),
+      (key: K, lhs: Option[V], rhs: Option[V]) => lhs.getOrElse(rhs.get))
+  }
 }

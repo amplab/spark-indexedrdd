@@ -29,8 +29,8 @@ abstract class IndexedRDDSuite extends FunSuite with SharedSparkContext {
 
   def create[V: ClassTag](elems: RDD[(Long, V)]): IndexedRDD[Long, V]
 
-  def pairs(sc: SparkContext, n: Int) = {
-    create(sc.parallelize((0 to n).map(x => (x.toLong, x)), 5))
+  def pairs(sc: SparkContext, n: Int, partitions: Int = 5) = {
+    create(sc.parallelize((0 to n).map(x => (x.toLong, x)), partitions))
   }
 
   test("get, multiget") {
@@ -179,6 +179,34 @@ abstract class IndexedRDDSuite extends FunSuite with SharedSparkContext {
     val messagesWithNew = List((0L, 1), (-1L, 1))
     assert(ps.aggregateUsingIndex[Int](sc.parallelize(messagesWithNew), _ + _).collect.toSet ===
       messagesWithNew.toSet)
+  }
+
+  test("zipWithOther sparse partitioning") {
+    val m = 5L
+    val partitions = 20
+    val n = 4
+
+    val ps = pairs(sc, n, partitions)
+    val myNumbers = sc.parallelize((0L to m), partitions)
+    val zipped = ps.zipWithOther(myNumbers, true) {
+      case (num, part) => 
+        part(num).getOrElse(17)
+    }
+    assert(zipped.collect.toSeq.sorted === Seq(0, 1, 2, 3, 4, 17))
+  }
+  
+  test("zipWithOther dense partitioning") {
+    val m = 5L
+    val partitions = 1
+    val n = 4
+
+    val ps = pairs(sc, n, partitions)
+    val myNumbers = sc.parallelize((0L to m), partitions)
+    val zipped = ps.zipWithOther(myNumbers, true) {
+    case (num, part) => 
+      part(num).getOrElse(17)
+    }
+    assert(zipped.collect.toSeq.sorted === Seq(0, 1, 2, 3, 4, 17))
   }
 }
 
