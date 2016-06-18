@@ -17,6 +17,8 @@
 
 package edu.berkeley.cs.amplab.spark.indexedrdd
 
+import java.util.UUID
+
 import org.scalatest.FunSuite
 import org.scalatest.Matchers
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -48,6 +50,36 @@ class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks wit
     }
   }
 
+  test("short") {
+    val ser = new ShortSerializer
+    forAll { (a: Short) =>
+      ser.fromBytes(ser.toBytes(a)) should be === a
+    }
+  }
+
+  test("int") {
+    val ser = new IntSerializer
+    forAll { (a: Int) =>
+      ser.fromBytes(ser.toBytes(a)) should be === a
+    }
+  }
+
+  test("UUID") {
+    val ser = new UUIDSerializer
+    Range(1,100).foreach(i => {
+      val uuid: UUID = UUID.randomUUID()
+      ser.fromBytes(ser.toBytes(uuid)) should be === uuid
+    }
+    )
+  }
+
+  test("bigint") {
+    val ser = new BigIntSerializer
+    forAll { (a: BigInt) =>
+      ser.fromBytes(ser.toBytes(a)) should be === a
+    }
+  }
+
   def tuple2Test[A: Arbitrary, B: Arbitrary](
       aSer: KeySerializer[A], bSer: KeySerializer[B]): Unit = {
     val ser = new Tuple2Serializer[A, B]()(aSer, bSer)
@@ -69,10 +101,18 @@ class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks wit
   test("Tuple2") {
     val stringSer = new StringSerializer
     val longSer = new LongSerializer
+    val shortSer = new ShortSerializer
+    val uuidSer = new UUIDSerializer
+    val bigintSer = new BigIntSerializer
 
     tuple2Test[Long, Long](longSer, longSer)
     tuple2Test[String, Long](stringSer, longSer)
     tuple2Test[Long, String](longSer, stringSer)
     tuple2Test[String, String](stringSer, stringSer)
+    tuple2Test[Short, Short](shortSer, shortSer)
+//    tuple2Test[Short, UUID](shortSer, uuidSer)
+//    tuple2Test[UUID, UUID](uuidSer, uuidSer)
+//    tuple2Test[UUID, BigInt](uuidSer, bigintSer)
+    tuple2Test[BigInt, BigInt](bigintSer, bigintSer)
   }
 }
