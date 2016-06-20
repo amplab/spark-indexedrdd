@@ -67,15 +67,15 @@ class IntSerializer extends KeySerializer[Int] {
 
 class BigIntSerializer extends KeySerializer[BigInt] {
   override def toBytes(k: BigInt) = {
-    // Append the BigInt bit length to ensure no key is a prefix of any other
+    // Prepend the BigInt bit length to ensure no key is a prefix of any other
     val lengthBytes = Array(
       ((k.bitLength >> 24) & 0xFF).toByte,
       ((k.bitLength >> 16) & 0xFF).toByte,
       ((k.bitLength >>  8) & 0xFF).toByte,
       ( k.bitLength        & 0xFF).toByte)
-    k.toByteArray ++ lengthBytes
+    lengthBytes ++ k.toByteArray
   }
-  override def fromBytes(b: Array[Byte]): BigInt = BigInt.apply(b.dropRight(4))
+  override def fromBytes(b: Array[Byte]): BigInt = BigInt.apply(b.drop(4))
 }
 
 class ShortSerializer extends KeySerializer[Short] {
