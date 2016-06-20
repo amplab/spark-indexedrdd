@@ -16,6 +16,7 @@
  */
 
 package edu.berkeley.cs.amplab.spark.indexedrdd
+
 import java.util.UUID
 
 /**
@@ -62,7 +63,7 @@ class IntSerializer extends KeySerializer[Int] {
     (b(0).toInt << 24) & (0xFF << 24) |
     (b(1).toInt << 16) & (0xFF << 16) |
     (b(2).toInt <<  8) & (0xFF <<  8) |
-    b(3).toInt  &  0xFF
+     b(3).toInt        &  0xFF
 }
 
 class BigIntSerializer extends KeySerializer[BigInt] {
@@ -83,14 +84,18 @@ class ShortSerializer extends KeySerializer[Short] {
     ((k >>  8) & 0xFF).toByte,
     ( k        & 0xFF).toByte)
   override def fromBytes(b: Array[Byte]): Short =
-    ((b(0).toInt <<  8) & (0xFF <<  8) |
-    b(1).toInt  &  0xFF).toShort
+    ((b(0).toInt << 8) & (0xFF << 8) |
+      b(1).toInt       &  0xFF).toShort
 }
 
-class UUIDSerializer (val LongSer: LongSerializer = new LongSerializer)
-  extends KeySerializer[UUID] {
-  override def toBytes(k: UUID) =  LongSer.toBytes(k.getMostSignificantBits) ++ LongSer.toBytes(k.getLeastSignificantBits)
-  override def fromBytes(b: Array[Byte]): UUID = new UUID(LongSer.fromBytes(b.take(8)), LongSer.fromBytes(b.takeRight(8)))
+class UUIDSerializer(val longSer: LongSerializer = new LongSerializer) extends KeySerializer[UUID] {
+  override def toBytes(k: UUID) =
+    (longSer.toBytes(k.getMostSignificantBits) ++
+      longSer.toBytes(k.getLeastSignificantBits))
+  override def fromBytes(b: Array[Byte]): UUID =
+    new UUID(
+      longSer.fromBytes(b.take(8)),
+      longSer.fromBytes(b.takeRight(8)))
 }
 
 class StringSerializer extends KeySerializer[String] {
