@@ -18,7 +18,6 @@
 package edu.berkeley.cs.amplab.spark.indexedrdd
 
 import java.util.UUID
-
 import org.scalatest.FunSuite
 import org.scalatest.Matchers
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -66,9 +65,22 @@ class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks wit
 
   test("UUID") {
     val ser = new UUIDSerializer
+//    There is no org.scalacheck.Arbitrary[T] for java.util.UUID, thus we generate UUID randomly
     Range(1,100).foreach(i => {
       val uuid: UUID = UUID.randomUUID()
       ser.fromBytes(ser.toBytes(uuid)) should be === uuid
+    }
+    )
+  }
+
+  test("UUID Tuple2") {
+    val aSer = new UUIDSerializer
+    val ser = new Tuple2Serializer[UUID, UUID]()(aSer, aSer)
+    //    There is no org.scalacheck.Arbitrary[T] for java.util.UUID, thus we generate UUID randomly
+    Range(1,100).foreach(i => {
+      val uuid1: UUID = UUID.randomUUID()
+      val uuid2: UUID = UUID.randomUUID()
+      ser.fromBytes(ser.toBytes((uuid1,uuid2))) should be === (uuid1,uuid2)
     }
     )
   }
@@ -101,8 +113,8 @@ class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks wit
   test("Tuple2") {
     val stringSer = new StringSerializer
     val longSer = new LongSerializer
+    val intSer = new IntSerializer
     val shortSer = new ShortSerializer
-    val uuidSer = new UUIDSerializer
     val bigintSer = new BigIntSerializer
 
     tuple2Test[Long, Long](longSer, longSer)
@@ -110,9 +122,9 @@ class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks wit
     tuple2Test[Long, String](longSer, stringSer)
     tuple2Test[String, String](stringSer, stringSer)
     tuple2Test[Short, Short](shortSer, shortSer)
-//    tuple2Test[Short, UUID](shortSer, uuidSer)
-//    tuple2Test[UUID, UUID](uuidSer, uuidSer)
-//    tuple2Test[UUID, BigInt](uuidSer, bigintSer)
+    tuple2Test[Short, Int](shortSer, intSer)
+    tuple2Test[Int, Int](intSer, intSer)
+    tuple2Test[Int, BigInt](intSer, bigintSer)
     tuple2Test[BigInt, BigInt](bigintSer, bigintSer)
   }
 }
