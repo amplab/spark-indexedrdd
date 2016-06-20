@@ -52,20 +52,20 @@ class LongSerializer extends KeySerializer[Long] {
 
 class StringSerializer extends KeySerializer[String] {
   override def toBytes(k: String) = {
-    val result = new Array[Byte](k.length * 2 + 4)
+    val result = new Array[Byte](4 + k.length * 2)
+
+    // Prepend the string length to ensure no key is a prefix of any other
+    result(0) = ((k.length >> 24) & 0xFF).toByte
+    result(1) = ((k.length >> 16) & 0xFF).toByte
+    result(2) = ((k.length >>  8) & 0xFF).toByte
+    result(3) = ( k.length        & 0xFF).toByte
 
     var i = 0
     while (i < k.length) {
-      result(2 * i)     = ((k(i) >> 8) & 0xFF).toByte
-      result(2 * i + 1) = ( k(i)       & 0xFF).toByte
+      result(4 + 2 * i)     = ((k(i) >> 8) & 0xFF).toByte
+      result(4 + 2 * i + 1) = ( k(i)       & 0xFF).toByte
       i += 1
     }
-
-    // Append the string length to ensure no key is a prefix of any other
-    result(k.length * 2    ) = ((k.length >> 24) & 0xFF).toByte
-    result(k.length * 2 + 1) = ((k.length >> 16) & 0xFF).toByte
-    result(k.length * 2 + 2) = ((k.length >>  8) & 0xFF).toByte
-    result(k.length * 2 + 3) = ( k.length        & 0xFF).toByte
 
     result
   }
@@ -76,8 +76,8 @@ class StringSerializer extends KeySerializer[String] {
     var i = 0
     while (i < result.length) {
       result(i) =
-        ((b(2 * i) << 8) & (0xFF << 8) |
-         (b(2 * i + 1)   &  0xFF)).toChar
+        ((b(4 + 2 * i) << 8) & (0xFF << 8) |
+         (b(4 + 2 * i + 1)   &  0xFF)).toChar
       i += 1
     }
 
