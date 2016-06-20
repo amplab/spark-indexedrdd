@@ -87,8 +87,18 @@ class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks wit
 
   test("bigint") {
     val ser = new BigIntSerializer
+
     forAll { (a: BigInt) =>
       ser.fromBytes(ser.toBytes(a)) should be === a
+    }
+
+    forAll { (a: BigInt, b: BigInt) =>
+      whenever (a != b) {
+        val aSer = ser.toBytes(a)
+        val bSer = ser.toBytes(b)
+        assert(!aSer.startsWith(bSer))
+        assert(!bSer.startsWith(aSer))
+      }
     }
   }
 
