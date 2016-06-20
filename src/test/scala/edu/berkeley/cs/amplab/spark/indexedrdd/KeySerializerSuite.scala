@@ -89,17 +89,6 @@ class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks wit
         assert(!bSer.startsWith(aSer))
       }
     }
-
-    forAll (Gen.const(BigInt("-1")), Gen.const(BigInt("-20282409603651670423947251286016"))) {
-      (a: BigInt, b: BigInt) =>
-      whenever (a != b) {
-        val aSer = ser.toBytes(a)
-        val bSer = ser.toBytes(b)
-        assert(!aSer.startsWith(bSer))
-        assert(!bSer.startsWith(aSer))
-      }
-    }
-
   }
 
   def tuple2Test[A: Arbitrary, B: Arbitrary](
