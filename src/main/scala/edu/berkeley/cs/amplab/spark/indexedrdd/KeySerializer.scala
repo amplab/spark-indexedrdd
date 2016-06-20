@@ -17,6 +17,8 @@
 
 package edu.berkeley.cs.amplab.spark.indexedrdd
 
+import java.util.UUID
+
 /**
  * Serializer for storing arbitrary key types as byte arrays for PART.
  *
@@ -48,6 +50,52 @@ class LongSerializer extends KeySerializer[Long] {
       (b(5).toLong << 16) & (0xFFL << 16) |
       (b(6).toLong <<  8) & (0xFFL <<  8) |
        b(7).toLong        &  0xFFL)
+}
+
+class IntSerializer extends KeySerializer[Int] {
+  override def toBytes(k: Int) = Array(
+    ((k >> 24) & 0xFF).toByte,
+    ((k >> 16) & 0xFF).toByte,
+    ((k >>  8) & 0xFF).toByte,
+    ( k        & 0xFF).toByte)
+
+  override def fromBytes(b: Array[Byte]): Int =
+    (b(0).toInt << 24) & (0xFF << 24) |
+    (b(1).toInt << 16) & (0xFF << 16) |
+    (b(2).toInt <<  8) & (0xFF <<  8) |
+     b(3).toInt        &  0xFF
+}
+
+class BigIntSerializer extends KeySerializer[BigInt] {
+  override def toBytes(k: BigInt) = {
+    // Prepend the BigInt bit length to ensure no key is a prefix of any other
+    val lengthBytes = Array(
+      ((k.bitLength >> 24) & 0xFF).toByte,
+      ((k.bitLength >> 16) & 0xFF).toByte,
+      ((k.bitLength >>  8) & 0xFF).toByte,
+      ( k.bitLength        & 0xFF).toByte)
+    lengthBytes ++ k.toByteArray
+  }
+  override def fromBytes(b: Array[Byte]): BigInt = BigInt.apply(b.drop(4))
+}
+
+class ShortSerializer extends KeySerializer[Short] {
+  override def toBytes(k: Short) = Array(
+    ((k >>  8) & 0xFF).toByte,
+    ( k        & 0xFF).toByte)
+  override def fromBytes(b: Array[Byte]): Short =
+    ((b(0).toInt << 8) & (0xFF << 8) |
+      b(1).toInt       &  0xFF).toShort
+}
+
+class UUIDSerializer(val longSer: LongSerializer = new LongSerializer) extends KeySerializer[UUID] {
+  override def toBytes(k: UUID) =
+    (longSer.toBytes(k.getMostSignificantBits) ++
+      longSer.toBytes(k.getLeastSignificantBits))
+  override def fromBytes(b: Array[Byte]): UUID =
+    new UUID(
+      longSer.fromBytes(b.take(8)),
+      longSer.fromBytes(b.takeRight(8)))
 }
 
 class StringSerializer extends KeySerializer[String] {

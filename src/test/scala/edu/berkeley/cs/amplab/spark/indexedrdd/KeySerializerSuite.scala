@@ -17,10 +17,13 @@
 
 package edu.berkeley.cs.amplab.spark.indexedrdd
 
+import java.util.UUID
+
+import org.scalacheck.Arbitrary
+import org.scalacheck.Gen
 import org.scalatest.FunSuite
 import org.scalatest.Matchers
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalacheck.Arbitrary
 
 class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks with Matchers {
 
@@ -48,6 +51,57 @@ class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks wit
     }
   }
 
+  test("short") {
+    val ser = new ShortSerializer
+    forAll { (a: Short) =>
+      ser.fromBytes(ser.toBytes(a)) should be === a
+    }
+  }
+
+  test("int") {
+    val ser = new IntSerializer
+    forAll { (a: Int) =>
+      ser.fromBytes(ser.toBytes(a)) should be === a
+    }
+  }
+
+  implicit val arbUUID: Arbitrary[UUID] = Arbitrary(Gen.uuid)
+
+  test("UUID") {
+    val ser = new UUIDSerializer
+    forAll { (a: UUID) =>
+      ser.fromBytes(ser.toBytes(a)) should be === a
+    }
+  }
+
+  test("bigint") {
+    val ser = new BigIntSerializer
+
+    forAll { (a: BigInt) =>
+      ser.fromBytes(ser.toBytes(a)) should be === a
+    }
+
+    forAll { (a: BigInt, b: BigInt) =>
+      whenever (a != b) {
+        val aSer = ser.toBytes(a)
+        val bSer = ser.toBytes(b)
+        assert(!aSer.startsWith(bSer))
+        assert(!bSer.startsWith(aSer))
+      }
+    }
+
+    forAll (Gen.const(BigInt("-1")), Gen.const(BigInt("-20282409603651670423947251286016"))) {
+      (a: BigInt, b: BigInt) =>
+      whenever (a != b) {
+        val aSer = ser.toBytes(a)
+        val bSer = ser.toBytes(b)
+        assert(!aSer.startsWith(bSer))
+        assert(!bSer.startsWith(aSer))
+      }
+    }
+
+  }
+
   def tuple2Test[A: Arbitrary, B: Arbitrary](
       aSer: KeySerializer[A], bSer: KeySerializer[B]): Unit = {
     val ser = new Tuple2Serializer[A, B]()(aSer, bSer)
@@ -69,10 +123,21 @@ class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks wit
   test("Tuple2") {
     val stringSer = new StringSerializer
     val longSer = new LongSerializer
+    val intSer = new IntSerializer
+    val shortSer = new ShortSerializer
+    val bigintSer = new BigIntSerializer
+    val uuidSer = new UUIDSerializer
 
     tuple2Test[Long, Long](longSer, longSer)
     tuple2Test[String, Long](stringSer, longSer)
     tuple2Test[Long, String](longSer, stringSer)
     tuple2Test[String, String](stringSer, stringSer)
+    tuple2Test[Short, Short](shortSer, shortSer)
+    tuple2Test[Short, Int](shortSer, intSer)
+    tuple2Test[Int, Int](intSer, intSer)
+    tuple2Test[Int, BigInt](intSer, bigintSer)
+    tuple2Test[BigInt, BigInt](bigintSer, bigintSer)
+    tuple2Test[Int, UUID](intSer, uuidSer)
+    tuple2Test[UUID, UUID](uuidSer, uuidSer)
   }
 }

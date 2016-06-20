@@ -457,6 +457,11 @@ object IndexedRDD {
 
   implicit val longSer = new LongSerializer
   implicit val stringSer = new StringSerializer
+  implicit val shortSer = new ShortSerializer
+  implicit val intSet = new IntSerializer
+  implicit val bigintSer = new BigIntSerializer
+  implicit val uuidSer = new UUIDSerializer
+
   implicit def tuple2Ser[A, B](
       implicit aSer: KeySerializer[A], bSer: KeySerializer[B]): Tuple2Serializer[A, B] =
     new Tuple2Serializer()(aSer, bSer)
