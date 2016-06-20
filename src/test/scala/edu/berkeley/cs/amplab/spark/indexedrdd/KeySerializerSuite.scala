@@ -18,10 +18,12 @@
 package edu.berkeley.cs.amplab.spark.indexedrdd
 
 import java.util.UUID
+
+import org.scalacheck.Arbitrary
+import org.scalacheck.Gen
 import org.scalatest.FunSuite
 import org.scalatest.Matchers
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalacheck.Arbitrary
 
 class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks with Matchers {
 
@@ -63,26 +65,13 @@ class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks wit
     }
   }
 
+  implicit val arbUUID: Arbitrary[UUID] = Arbitrary(Gen.uuid)
+
   test("UUID") {
     val ser = new UUIDSerializer
-//    There is no org.scalacheck.Arbitrary[T] for java.util.UUID, thus we generate UUID randomly
-    Range(1,100).foreach(i => {
-      val uuid: UUID = UUID.randomUUID()
-      ser.fromBytes(ser.toBytes(uuid)) should be === uuid
+    forAll { (a: UUID) =>
+      ser.fromBytes(ser.toBytes(a)) should be === a
     }
-    )
-  }
-
-  test("UUID Tuple2") {
-    val aSer = new UUIDSerializer
-    val ser = new Tuple2Serializer[UUID, UUID]()(aSer, aSer)
-    //    There is no org.scalacheck.Arbitrary[T] for java.util.UUID, thus we generate UUID randomly
-    Range(1,100).foreach(i => {
-      val uuid1: UUID = UUID.randomUUID()
-      val uuid2: UUID = UUID.randomUUID()
-      ser.fromBytes(ser.toBytes((uuid1,uuid2))) should be === (uuid1,uuid2)
-    }
-    )
   }
 
   test("bigint") {
@@ -137,6 +126,7 @@ class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks wit
     val intSer = new IntSerializer
     val shortSer = new ShortSerializer
     val bigintSer = new BigIntSerializer
+    val uuidSer = new UUIDSerializer
 
     tuple2Test[Long, Long](longSer, longSer)
     tuple2Test[String, Long](stringSer, longSer)
@@ -147,5 +137,7 @@ class KeySerializerSuite extends FunSuite with GeneratorDrivenPropertyChecks wit
     tuple2Test[Int, Int](intSer, intSer)
     tuple2Test[Int, BigInt](intSer, bigintSer)
     tuple2Test[BigInt, BigInt](bigintSer, bigintSer)
+    tuple2Test[Int, UUID](intSer, uuidSer)
+    tuple2Test[UUID, UUID](uuidSer, uuidSer)
   }
 }
