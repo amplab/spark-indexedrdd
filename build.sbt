@@ -1,22 +1,27 @@
 name := "spark-indexedrdd"
-
-version := "0.3"
-
+version := "0.4.0"
 organization := "edu.berkeley.cs.amplab"
 
-scalaVersion := "2.10.4"
+scalaVersion := "2.11.8"
+crossScalaVersions := Seq("2.10.6", "2.11.6")
 
 spName := "amplab/spark-indexedrdd"
-
-sparkVersion := "1.5.0"
-
+sparkVersion := "2.1.0"
 sparkComponents += "core"
+
+resolvers += "Repo at github.com/ankurdave/maven-repo" at "https://raw.githubusercontent.com/ankurdave/maven-repo/master"
+
+libraryDependencies ++= Seq(
+  "com.ankurdave" % "part_2.10" % "0.1",  // artifact is not published for 2.11, but it only contains Java code anyway
+  "org.scalatest" %% "scalatest" % "2.2.4" % "test",
+  "org.scalacheck" %% "scalacheck" % "1.12.2" % "test"
+)
 
 publishMavenStyle := true
 
 licenses += "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.html")
 
-pomExtra := (
+pomExtra :=
   <url>https://github.com/amplab/spark-indexedrdd</url>
   <scm>
     <url>git@github.com:amplab/spark-indexedrdd.git</url>
@@ -28,15 +33,8 @@ pomExtra := (
       <name>Ankur Dave</name>
       <url>https://github.com/ankurdave</url>
     </developer>
-  </developers>)
+  </developers>
 
-libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.4" % "test"
-
-libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.12.2" % "test"
-
-resolvers += "Repo at github.com/ankurdave/maven-repo" at "https://raw.githubusercontent.com/ankurdave/maven-repo/master"
-
-libraryDependencies += "com.ankurdave" %% "part" % "0.1"
 
 // Run tests with more memory
 javaOptions in test += "-Xmx2G"

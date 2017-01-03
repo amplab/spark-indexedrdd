@@ -87,9 +87,9 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
           val ksForPartition = ksByPartition.get(context.partitionId).get
           part.multiget(ksForPartition).toArray
         } else {
-          Array.empty
+          Array.empty[(K, V)]
         }
-      }, partitions, allowLocal = true)
+      }, partitions)
     results.flatten.toMap
   }
 
@@ -109,7 +109,18 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
    * Some implementations may not support this operation and will throw
    * `UnsupportedOperationException`.
    */
-  def multiput(kvs: Map[K, V]): IndexedRDD[K, V] = multiput[V](kvs, (id, a) => a, (id, a, b) => b)
+  def multiput(kvs: Map[K, V]): IndexedRDD[K, V] =
+    multiput(kvs, (id: K, a: V) => a, (id: K, a: V, b: V) => b)
+
+  /**
+    * Unconditionally updates the keys in `kvs` to their corresponding values. Returns a new
+    * IndexedRDD that reflects the modification.
+    *
+    * Some implementations may not support this operation and will throw
+    * `UnsupportedOperationException`.
+    */
+  def multiputRDD(kvs: RDD[(K, V)]): IndexedRDD[K, V] =
+    multiputRDD(kvs, (id: K, a: V) => a, (id: K, a: V, b: V) => b)
 
   /**
    * Updates the keys in `kvs` to their corresponding values, running `merge` on old and new values
@@ -119,7 +130,17 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
    * `UnsupportedOperationException`.
    */
   def multiput(kvs: Map[K, V], merge: (K, V, V) => V): IndexedRDD[K, V] =
-    multiput[V](kvs, (id, a) => a, merge)
+    multiput(kvs, (id: K, a: V) => a, merge)
+
+  /**
+    * Updates the keys in `kvs` to their corresponding values, running `merge` on old and new values
+    * if necessary. Returns a new IndexedRDD that reflects the modification.
+    *
+    * Some implementations may not support this operation and will throw
+    * `UnsupportedOperationException`.
+    */
+  def multiputRDD(kvs: RDD[(K, V)], merge: (K, V, V) => V): IndexedRDD[K, V] =
+    multiputRDD(kvs, (id: K, a: V) => a, merge)
 
   /**
    * Updates the keys in `kvs` to their corresponding values, running `merge` on old and new values
@@ -128,9 +149,18 @@ class IndexedRDD[K: ClassTag, V: ClassTag](
    * Some implementations may not support this operation and will throw
    * `UnsupportedOperationException`.
    */
-  def multiput[U: ClassTag](kvs: Map[K, U], z: (K, U) => V, f: (K, V, U) => V): IndexedRDD[K, V] = {
-    val updates = context.parallelize(kvs.toSeq).partitionBy(partitioner.get)
-    zipPartitionsWithOther(updates)(new MultiputZipper(z, f))
+  def multiput[U: ClassTag](kvs: Map[K, U], project: (K, U) => V, merge: (K, V, U) => V): IndexedRDD[K, V] =
+    multiputRDD(context.parallelize(kvs.toSeq), project, merge)
+
+  /**
+    * Updates the keys in `kvs` to their corresponding values, running `merge` on old and new values
+    * if necessary. Returns a new IndexedRDD that reflects the modification.
+    *
+    * Some implementations may not support this operation and will throw
+    * `UnsupportedOperationException`.
+    */
+  def multiputRDD[U: ClassTag](updates: RDD[(K, U)], project: (K, U) => V, merge: (K, V, U) => V): IndexedRDD[K, V] = {
+    zipPartitionsWithOther(updates.partitionBy(partitioner.get))(new MultiputZipper(project, merge))
   }
 
   /**

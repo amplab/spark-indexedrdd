@@ -20,10 +20,7 @@ package edu.berkeley.cs.amplab.spark.indexedrdd.impl
 import scala.reflect.ClassTag
 import scala.collection.JavaConversions._
 
-import org.apache.spark.Logging
-
 import edu.berkeley.cs.amplab.spark.indexedrdd._
-
 import com.ankurdave.part.ArtTree
 
 private[indexedrdd] class PARTPartition[K, V]
@@ -31,7 +28,7 @@ private[indexedrdd] class PARTPartition[K, V]
     (override implicit val kTag: ClassTag[K],
      override implicit val vTag: ClassTag[V],
      implicit val kSer: KeySerializer[K])
-  extends IndexedRDDPartition[K, V] with Logging {
+  extends IndexedRDDPartition[K, V] {
 
   protected def withMap[V2: ClassTag]
       (map: ArtTree): PARTPartition[K, V2] = {
