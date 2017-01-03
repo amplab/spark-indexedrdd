@@ -29,7 +29,7 @@ import edu.berkeley.cs.amplab.spark.indexedrdd.impl._
 /**
  * An RDD of key-value `(K, V)` pairs that pre-indexes the entries for fast lookups, joins, and
  * optionally updates. To construct an `IndexedRDD`, use one of the constructors in the
- * [[edu.berkeley.cs.amplab.spark.indexedrdd.IndexedRDD IndexedRDD object]].
+ * [[edu.berkeley.cs.amplab.spark.indexedrdd.IndexedRDD$ IndexedRDD object]].
  *
  * @tparam K the key associated with each entry in the set.
  * @tparam V the value associated with each entry in the set.
