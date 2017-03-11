@@ -88,6 +88,15 @@ class ShortSerializer extends KeySerializer[Short] {
       b(1).toInt       &  0xFF).toShort
 }
 
+class CharSerializer extends KeySerializer[Char] {
+  override def toBytes(k: Char) = Array(
+    ((k >>  8) & 0xFF).toByte,
+    ( k        & 0xFF).toByte)
+  override def fromBytes(b: Array[Byte]): Char =
+    ((b(0).toInt << 8) & (0xFF << 8) |
+      b(1).toInt       &  0xFF).toChar
+}
+
 class UUIDSerializer(val longSer: LongSerializer = new LongSerializer) extends KeySerializer[UUID] {
   override def toBytes(k: UUID) =
     (longSer.toBytes(k.getMostSignificantBits) ++

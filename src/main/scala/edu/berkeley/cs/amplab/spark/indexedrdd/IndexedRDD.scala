@@ -488,6 +488,7 @@ object IndexedRDD {
   implicit val longSer = new LongSerializer
   implicit val stringSer = new StringSerializer
   implicit val shortSer = new ShortSerializer
+  implicit val charSer = new CharSerializer
   implicit val intSet = new IntSerializer
   implicit val bigintSer = new BigIntSerializer
   implicit val uuidSer = new UUIDSerializer
