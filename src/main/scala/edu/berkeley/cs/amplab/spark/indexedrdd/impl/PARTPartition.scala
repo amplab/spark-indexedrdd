@@ -174,6 +174,11 @@ private[indexedrdd] class PARTPartition[K, V]
       (f: (K, V, Option[V2]) => V3): IndexedRDDPartition[K, V3] =
     leftJoin(PARTPartition(other))(f)
 
+  override def rightJoin[V2: ClassTag, V3: ClassTag]
+      (other: Iterator[(K, V2)])
+      (f: (K, Option[V], V2) => V3): IndexedRDDPartition[K, V3] =
+    rightJoin(PARTPartition(other))(f)
+
   override def innerJoin[U: ClassTag, V2: ClassTag]
       (other: IndexedRDDPartition[K, U])
       (f: (K, V, U) => V2): IndexedRDDPartition[K, V2] = other match {
